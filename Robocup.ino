@@ -39,7 +39,7 @@ const int RIGHT_IN2 = 4;
 // PID
 // =====================================================
 
-float Kp = 1.00;
+float Kp = 1.20;
 float Ki = 0.00;
 float Kd = 0.00;
 
@@ -60,7 +60,7 @@ const int CENTER = 3500;
 // +3500 always remains +3500
 // -3500 always remains -3500
 
-float ERROR_EXPONENT = 2.0;
+float ERROR_EXPONENT = 1.4;
 
 
 float integral = 0;
@@ -73,11 +73,10 @@ unsigned long previousTime;
 // MOTOR
 // =====================================================
 
-int baseSpeed = 192;
+int baseSpeed = 160;
 
 const int MAX_SPEED = 255;
-const int MAX_CORRECTION = 320;
-
+const int MAX_CORRECTION = 298;
 
 // =====================================================
 // CALIBRATION
