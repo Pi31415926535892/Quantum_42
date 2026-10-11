@@ -1,3 +1,78 @@
+#include <Adafruit_NeoPixel.h>
+#include <math.h>
+
+// =====================================================
+// WS2812B LEDS
+// =====================================================
+
+Adafruit_NeoPixel strip(8, 35, NEO_GRB + NEO_KHZ800);
+
+const int LED_BRIGHTNESS = 16;
+const int LED_DIM = 128;
+const int LED_DELAY = 40;
+
+void showLedDot(int pixel) {
+  strip.clear();
+  strip.setPixelColor(pixel, strip.Color(255, 255, 255));
+  strip.show();
+}
+
+// =====================================================
+// CALIBRATION LED SWEEP
+// =====================================================
+
+void calibrationAnimation() {
+  static int pixel = 0;
+  static int direction = 1;
+  static unsigned long lastUpdate = 0;
+
+  if (millis() - lastUpdate >= LED_DELAY) {
+    lastUpdate = millis();
+
+    showLedDot(pixel);
+
+    pixel += direction;
+
+    if (pixel >= 7) {
+      pixel = 7;
+      direction = -1;
+    }
+    else if (pixel <= 0) {
+      pixel = 0;
+      direction = 1;
+    }
+  }
+}
+
+void calibrationComplete() {
+  strip.clear();
+  strip.show();
+  delay(100);
+
+  for (int i = 0; i < 2; i++) {
+    strip.fill(strip.Color(255, 255, 255));
+    strip.show();
+    delay(100);
+
+    strip.clear();
+    strip.show();
+    delay(100);
+  }
+}
+
+// =====================================================
+// LIVE ERROR DISPLAY
+// =====================================================
+
+void showError(float error) {
+  // Map shaped PID error to LED position.
+  // Negative = left side, positive = right side.
+  float index = (error + 3500.0) * 7.0 / 7000.0;
+  index = constrain(index, 0.0, 7.0);
+
+  showLedDot((int)(index + 0.5));
+}
+
 // =====================================================
 // SENSORS
 // =====================================================
@@ -15,25 +90,14 @@ const int positions[8] = {
 int sensorMin[8];
 int sensorMax[8];
 
-
 // =====================================================
 // L298N
 // =====================================================
 
-// Left motor
-// IN1 = D3
-// IN2 = D5
-
-// Right motor
-// IN1 = D2
-// IN2 = D4
-
 const int LEFT_IN1  = 3;
 const int LEFT_IN2  = 5;
-
 const int RIGHT_IN1 = 2;
 const int RIGHT_IN2 = 4;
-
 
 // =====================================================
 // PID
@@ -45,29 +109,11 @@ float Kd = 0.00;
 
 const int CENTER = 3500;
 
-
-// =====================================================
-// ERROR EXPONENT
-// =====================================================
-
-// 1.0 = completely linear
-// 1.2 = mild
-// 1.4 = moderate
-// 2.0 = strong
-// 3.0 = VERY strong
-//
-// The error is normalized first, so:
-// +3500 always remains +3500
-// -3500 always remains -3500
-
 float ERROR_EXPONENT = 1.4;
-
 
 float integral = 0;
 float previousError = 0;
-
 unsigned long previousTime;
-
 
 // =====================================================
 // MOTOR
@@ -83,7 +129,6 @@ const int MAX_CORRECTION = 298;
 // =====================================================
 
 void calibrateSensors() {
-
   for (int i = 0; i < 8; i++) {
     sensorMin[i] = 1023;
     sensorMax[i] = 0;
@@ -98,9 +143,7 @@ void calibrateSensors() {
   unsigned long startTime = millis();
 
   while (millis() - startTime < 10000) {
-
     for (int i = 0; i < 8; i++) {
-
       int reading = analogRead(sensorPins[i]);
 
       if (reading < sensorMin[i])
@@ -109,18 +152,19 @@ void calibrateSensors() {
       if (reading > sensorMax[i])
         sensorMax[i] = reading;
     }
+
+    calibrationAnimation();
   }
+
+  calibrationComplete();
 
   Serial.println("CALIBRATION COMPLETE");
 
   for (int i = 0; i < 8; i++) {
-
     Serial.print("S");
     Serial.print(i);
-
     Serial.print(" MIN=");
     Serial.print(sensorMin[i]);
-
     Serial.print(" MAX=");
     Serial.println(sensorMax[i]);
   }
@@ -128,18 +172,15 @@ void calibrateSensors() {
   Serial.println();
 }
 
-
 // =====================================================
 // LINE POSITION
 // =====================================================
 
 int getLinePosition() {
-
   long weightedSum = 0;
   long total = 0;
 
   for (int i = 0; i < 8; i++) {
-
     int reading = analogRead(sensorPins[i]);
 
     int value = map(
@@ -162,169 +203,86 @@ int getLinePosition() {
   return weightedSum / total;
 }
 
-
 // =====================================================
 // NONLINEAR ERROR
 // =====================================================
-//
-// Normalizes error to -1 ... +1
-// Applies exponent
-// Scales back to -3500 ... +3500
-//
-// This guarantees the endpoints stay unchanged.
-//
-// Example with exponent = 3:
-//
-// raw       used
-// ----------------
-//  500       10
-// 1000       82
-// 1500      276
-// 2000      653
-// 2500     1276
-// 3000     2204
-// 3500     3500
-//
-// Negative values are mirrored.
-// =====================================================
 
 float shapeError(float rawError) {
+  float normalized = rawError / (float)CENTER;
 
-  float normalized =
-    rawError / (float)CENTER;
+  normalized = constrain(normalized, -1.0, 1.0);
 
-  // Keep it inside -1 ... +1
-  normalized = constrain(
-    normalized,
-    -1.0,
-    1.0
+  float shaped = copysign(
+    pow(abs(normalized), ERROR_EXPONENT),
+    normalized
   );
-
-  float shaped =
-    copysign(
-      pow(abs(normalized), ERROR_EXPONENT),
-      normalized
-    );
 
   return shaped * CENTER;
 }
-
 
 // =====================================================
 // PID
 // =====================================================
 
 float calculatePID(int position) {
-
   unsigned long currentTime = micros();
 
-  float dt =
-    (currentTime - previousTime) / 1000000.0;
-
+  float dt = (currentTime - previousTime) / 1000000.0;
   previousTime = currentTime;
 
   if (dt <= 0)
     dt = 0.001;
 
-
-  // -----------------------------------------------
-  // RAW ERROR
-  // -----------------------------------------------
-
-  float rawError =
-    CENTER - position;
-
-
-  // -----------------------------------------------
-  // NONLINEAR ERROR
-  // -----------------------------------------------
-
-  float usedError =
-    shapeError(rawError);
-
-
-  // -----------------------------------------------
-  // Integral
-  // -----------------------------------------------
+  float rawError = CENTER - position;
+  float usedError = shapeError(rawError);
 
   integral += usedError * dt;
+  integral = constrain(integral, -10000, 10000);
 
-  integral = constrain(
-    integral,
-    -10000,
-    10000
-  );
-
-
-  // -----------------------------------------------
-  // Derivative
-  // -----------------------------------------------
-
-  float derivative =
-    (usedError - previousError) / dt;
-
+  float derivative = (usedError - previousError) / dt;
   previousError = usedError;
 
-
-  // -----------------------------------------------
-  // PID
-  // -----------------------------------------------
-
-  return
-    Kp * usedError +
-    Ki * integral +
-    Kd * derivative;
+  return Kp * usedError + Ki * integral + Kd * derivative;
 }
 
-
 // =====================================================
-// L298N MOTOR CONTROL
-//
-// Positive = forward
-// Negative = reverse
-//
-// PWM is applied directly to the active IN pin.
+// MOTOR CONTROL
 // =====================================================
 
 void setMotor(int in1, int in2, int speed) {
-
   speed = constrain(speed, -255, 255);
 
   if (speed > 0) {
-
     analogWrite(in1, speed);
     digitalWrite(in2, LOW);
-
   }
   else if (speed < 0) {
-
     digitalWrite(in1, LOW);
     analogWrite(in2, -speed);
-
   }
   else {
-
     digitalWrite(in1, LOW);
     digitalWrite(in2, LOW);
   }
 }
-
 
 // =====================================================
 // SETUP
 // =====================================================
 
 void setup() {
-
   Serial.begin(115200);
+
+  strip.begin();
+  strip.setBrightness(LED_BRIGHTNESS);
+  strip.clear();
+  strip.show();
 
   pinMode(LEFT_IN1, OUTPUT);
   pinMode(LEFT_IN2, OUTPUT);
-
   pinMode(RIGHT_IN1, OUTPUT);
   pinMode(RIGHT_IN2, OUTPUT);
 
-  // Motors off
   setMotor(LEFT_IN1, LEFT_IN2, 0);
   setMotor(RIGHT_IN1, RIGHT_IN2, 0);
 
@@ -337,24 +295,17 @@ void setup() {
   Serial.println("PID START");
 }
 
-
 // =====================================================
 // LOOP
 // =====================================================
 
 void loop() {
+  int position = getLinePosition();
 
-  int position =
-    getLinePosition();
+  float rawError = CENTER - position;
+  float usedError = shapeError(rawError);
 
-  float rawError =
-    CENTER - position;
-
-  float usedError =
-    shapeError(rawError);
-
-  float correction =
-    calculatePID(position);
+  float correction = calculatePID(position);
 
   correction = constrain(
     correction,
@@ -362,49 +313,17 @@ void loop() {
     MAX_CORRECTION
   );
 
+  // Display current shaped PID error
+  showError(usedError);
 
-  // -----------------------------------------------
-  // DIFFERENTIAL DRIVE
-  // -----------------------------------------------
+  int leftSpeed = baseSpeed + correction;
+  int rightSpeed = baseSpeed - correction;
 
-  int leftSpeed =
-    baseSpeed + correction;
+  leftSpeed = constrain(leftSpeed, -MAX_SPEED, MAX_SPEED);
+  rightSpeed = constrain(rightSpeed, -MAX_SPEED, MAX_SPEED);
 
-  int rightSpeed =
-    baseSpeed - correction;
-
-
-  leftSpeed =
-    constrain(
-      leftSpeed,
-      -MAX_SPEED,
-      MAX_SPEED
-    );
-
-  rightSpeed =
-    constrain(
-      rightSpeed,
-      -MAX_SPEED,
-      MAX_SPEED
-    );
-
-
-  setMotor(
-    LEFT_IN1,
-    LEFT_IN2,
-    leftSpeed
-  );
-
-  setMotor(
-    RIGHT_IN1,
-    RIGHT_IN2,
-    rightSpeed
-  );
-
-
-  // -----------------------------------------------
-  // DEBUG
-  // -----------------------------------------------
+  setMotor(LEFT_IN1, LEFT_IN2, leftSpeed);
+  setMotor(RIGHT_IN1, RIGHT_IN2, rightSpeed);
 
   Serial.print("POS:");
   Serial.print(position);
@@ -423,7 +342,6 @@ void loop() {
 
   Serial.print(" R:");
   Serial.println(rightSpeed);
-
 
   delay(5);
 }
