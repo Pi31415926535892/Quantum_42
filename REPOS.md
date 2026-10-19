@@ -1,0 +1,108 @@
+# Repository Map — where the code actually lives
+
+This project is spread across **two separate Git repositories**. They are
+deliberately independent — neither is a copy of the other, and they do **not**
+share history. Read this file before you go looking for "the latest code".
+
+> **Short version**
+> The **newest, actively-developed robot firmware** lives in the **firmware
+> repo** at `~/Documents/Arduino/Robocup.ino`.
+> **This** repo (`Quantum_42`) holds specs, docs, hardware notes, CAD, results
+> and an earlier in-repo firmware design. If you are hunting for working robot
+> code, it is almost certainly the firmware repo.
+
+---
+
+## 1. Project repo (this one)
+
+| | |
+|---|---|
+| **Path** | `~/Documents/Quantum_42` |
+| **Remote (origin)** | `https://github.com/Pi31415926535892/Quantum_42.git` — **public** |
+| **GitHub owner** | `Pi31415926535892` |
+| **Default branch** | `main` |
+| **Working branch** | `heist/rcj-rescue-line-2026` |
+| **Holds** | Gangsta heist artifacts (`docs/gangsta/`), hardware ground truth (`HARDWARE.md`), Nicla Vision scripts (`nicla/`), host test harness (`test/`), chassis CAD (`RoboCupBot/`), bench/run logs (`results/`), and the in-repo firmware design (`src/rescue_robot/`). |
+
+## 2. Firmware repo (active development)
+
+| | |
+|---|---|
+| **Path** | `~/Documents/Arduino/Robocup.ino` |
+| **Remote (origin)** | `git@github.com:BismarckYamato/Quantum_42-Firmware.git` — **private** (SSH) |
+| **GitHub owner** | `BismarckYamato` |
+| **Default branch** | `main` |
+| **Holds** | **The active Arduino Mega 2560 firmware.** Newest commits and the current robot code (`Robocup.ino.ino`, `ColourCalibration.h`, `MarkerSettle.h`, `LedDisplay.h`, …) live here. |
+
+The firmware repo is also registered in **this** repo as a **git submodule** at
+`firmware/`, pinned to a specific commit — see [§5](#5-submodule-firmware).
+
+> **Note on accounts.** The two repos are owned by two different GitHub
+> accounts: `Pi31415926535892` (project) and `BismarckYamato` (firmware).
+> `BismarckYamato` is the account authenticated on this machine and a
+> collaborator (push access) on `Quantum_42`. This is intentional — do not
+> "fix" it by renaming repos without checking with the team.
+
+---
+
+## 3. There are three firmware locations — know which is which
+
+This is the single biggest source of confusion. There are **three** places
+firmware-like code exists, and only one of them is current:
+
+| Location | What it is | Status |
+|---|---|---|
+| `~/Documents/Arduino/Robocup.ino` (**firmware repo**) | The real, actively-developed firmware | ✅ **CURRENT — develop here** |
+| `firmware/` (**this repo**, submodule) | A pinned read-only reference to the firmware repo at a known commit | 📌 Pin only — edit the Arduino folder, not here |
+| `src/rescue_robot/` (**this repo**) | An earlier spec-driven Mega firmware design with host tests in `test/` | ⚠️ Superseded / historical — confirm before relying on it |
+| `Robocup.ino`, `PWM Test` (**this repo**) | Legacy early sketches | ⚠️ Legacy (left/right swapped, wrong Kp/line-lost) |
+
+## 4. How to tell which folder is newest
+
+Run the helper:
+
+```sh
+scripts/repo-status.sh
+```
+
+It prints, side by side, each repo's branch, HEAD, last commit date, working-tree
+status, remote, and how the submodule pin compares to the firmware repo's HEAD.
+
+Manually, the fastest check is:
+
+```sh
+git -C ~/Documents/Quantum_42            log -1 --format='project : %h %ci %s'
+git -C ~/Documents/Arduino/Robocup.ino   log -1 --format='firmware: %h %ci %s'
+```
+
+Whichever shows the **more recent date** is the more recent code. Historically
+that has been the **firmware repo**.
+
+## 5. Submodule (`firmware/`)
+
+The submodule records *exactly* which firmware commit this project snapshot
+corresponds to.
+
+```sh
+# see the pinned commit
+git submodule status firmware
+
+# after pushing new firmware, re-point the pin to the firmware repo's latest
+scripts/sync-firmware.sh
+```
+
+Because the firmware's working copy lives in the Arduino sketchbook, the
+`firmware/` checkout here will **lag** unless you re-run the sync script. That is
+expected: `firmware/` is a reference, not where you edit.
+
+## 6. Everyday workflow
+
+1. **Write firmware** in `~/Documents/Arduino/Robocup.ino`.
+2. Commit and push there (`git push` → `Quantum_42-Firmware`, private).
+3. Back in this repo, update the pin: `scripts/sync-firmware.sh`.
+4. Commit any project-side docs/results here on the `heist/rcj-rescue-line-2026`
+   branch.
+
+---
+
+_Last updated: 2026-10-19. If you change where code lives, update this file._
