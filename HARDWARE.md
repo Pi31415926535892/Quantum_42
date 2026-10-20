@@ -63,12 +63,14 @@ Logical index 0 is the **leftmost** sensor when looking forward; index 7 is the 
 
 | Logical index | 0 (left) | 1 | 2 | 3 | 4 | 5 | 6 | 7 (right) |
 |---------------|----------|---|---|---|---|---|---|-----------|
-| MCU pin | A0 | A2 | A4 | A6 | A8 | A10 | A12 | A14 |
+| MCU pin | A14 | A12 | A10 | A8 | A6 | A4 | A2 | A0 |
 
-- **CODE**: `sensorPins[8] = { A0, A2, A4, A6, A8, A10, A12, A14 }` in `Robocup.ino.ino`.
-- The harness is **straight-through**: OUT1 (leftmost) → A0, OUT8 (rightmost) → A14.
-  A 2026-10-20 "connector flipped" report was **withdrawn the same day**; the table was
-  restored. Do not reverse it on a report alone — confirm with `j` first (§8).
+- **CODE**: `sensorPins[8] = { A14, A12, A10, A8, A6, A4, A2, A0 }` in `Robocup.ino.ino`.
+- **BENCH 2026-10-20 — net flip = 1**: the harness is flipped, so OUT1 (leftmost) lands
+  on A14 and OUT8 (rightmost) on A0. With the straight-through table the robot steered
+  **away** from the line, the wheels fought and the motors whined without following.
+  That symptom is the field test for this table: if it returns, check the mapping with
+  `j` before changing anything else (§8).
 
 ### 2.3 Colour / marker sensors — 2 × APDS-9960
 
@@ -138,22 +140,23 @@ updating this table and the sketch together.
 
 ```
    ARDUINO MEGA                         QTR-8A
-   A0  ──────────────────────────────►  OUT1 (leftmost)
-   A2  ──────────────────────────────►  OUT2
-   A4  ──────────────────────────────►  OUT3
-   A6  ──────────────────────────────►  OUT4
-   A8  ──────────────────────────────►  OUT5
-   A10 ──────────────────────────────►  OUT6
-   A12 ──────────────────────────────►  OUT7
-   A14 ──────────────────────────────►  OUT8 (rightmost)
+   A0  ──────────────────────────────►  OUT8 (rightmost)
+   A2  ──────────────────────────────►  OUT7
+   A4  ──────────────────────────────►  OUT6
+   A6  ──────────────────────────────►  OUT5
+   A8  ──────────────────────────────►  OUT4
+   A10 ──────────────────────────────►  OUT3
+   A12 ──────────────────────────────►  OUT2
+   A14 ──────────────────────────────►  OUT1 (leftmost)
    5 V ──────────────────────────────►  VCC
    GND ──────────────────────────────►  GND
                                         LEDON: NOT CONNECTED
 ```
 
-- **Straight-through wiring**: OUT1 (leftmost) → A0 … OUT8 (rightmost) → A14. A
-  2026-10-20 report that the connector had been flipped was withdrawn the same day and
-  the firmware table was restored; verify with `j` before changing it again.
+- **Flipped (net flip = 1, BENCH 2026-10-20)**: OUT1 (leftmost) → A14 … OUT8 (rightmost)
+  → A0. The firmware table (`A14 … A0`) matches this. The straight-through table made the
+  robot steer away from the line and the motors whine; do not restore it without a bench
+  check.
 - `LEDON` is not connected — correct for the analog QTR-8A, whose emitters run continuously.
 - **Ride height ~11.2 mm** — near the top of the QTR-8A's contrast range. Black/white
   readings are closer together than ideal, so the calibration sweep is mandatory and
@@ -251,7 +254,7 @@ Run these on the bench before any run. Each item names the evidence it produces.
 
 | Date | Change | Evidence |
 |------|--------|----------|
-| 2026-10-20 | Line-flip report **withdrawn**: the table is straight-through `A0 … A14`; firmware restored | reported then retracted; bench mapping unchanged |
+| 2026-10-20 | Line bar **flipped (net flip = 1)**: table `A14 … A0`. The straight-through table caused inverted steering, fighting wheels and motor whine | **BENCH** |
 | 2026-10-20 | Legacy sketches and the in-repo design removed; this document rebuilt with evidence tags | code + git history |
 | 2026-10-17 | Motor inputs remapped to D2–D5; ENA/ENB no longer driven by the sketch | **CODE** |
 | 2026-10-18 | L298N verified: `w` drove all four wheels forward, `l`/`r` pivots matched the marker convention | **BENCH** |
