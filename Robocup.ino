@@ -1,249 +1,311 @@
-#include <QTRSensors.h>
+#include <Adafruit_NeoPixel.h>
+#include <math.h>
 
-QTRSensors qtr;
+// =====================================================
+// WS2812B LEDS
+// =====================================================
 
-const uint8_t SensorCount = 8;
-uint16_t sensorValues[SensorCount];
+Adafruit_NeoPixel strip(8, 35, NEO_GRB + NEO_KHZ800);
 
-// ============================================================
-// QTR-8A
-// ============================================================
+const int LED_BRIGHTNESS = 16;
+const int LED_DIM = 128;
+const int LED_DELAY = 40;
 
-const uint8_t sensorPins[SensorCount] = {
+void showLedDot(int pixel) {
+  strip.clear();
+  strip.setPixelColor(pixel, strip.Color(255, 255, 255));
+  strip.show();
+}
+
+// =====================================================
+// CALIBRATION LED SWEEP
+// =====================================================
+
+void calibrationAnimation() {
+  static int pixel = 0;
+  static int direction = 1;
+  static unsigned long lastUpdate = 0;
+
+  if (millis() - lastUpdate >= LED_DELAY) {
+    lastUpdate = millis();
+
+    showLedDot(pixel);
+
+    pixel += direction;
+
+    if (pixel >= 7) {
+      pixel = 7;
+      direction = -1;
+    }
+    else if (pixel <= 0) {
+      pixel = 0;
+      direction = 1;
+    }
+  }
+}
+
+void calibrationComplete() {
+  strip.clear();
+  strip.show();
+  delay(100);
+
+  for (int i = 0; i < 2; i++) {
+    strip.fill(strip.Color(255, 255, 255));
+    strip.show();
+    delay(100);
+
+    strip.clear();
+    strip.show();
+    delay(100);
+  }
+}
+
+// =====================================================
+// LIVE ERROR DISPLAY
+// =====================================================
+
+void showError(float error) {
+  // Map shaped PID error to LED position.
+  // Negative = left side, positive = right side.
+  float index = (error + 3500.0) * 7.0 / 7000.0;
+  index = constrain(index, 0.0, 7.0);
+
+  showLedDot((int)(index + 0.5));
+}
+
+// =====================================================
+// SENSORS
+// =====================================================
+
+const int sensorPins[8] = {
   A0, A2, A4, A6,
   A8, A10, A12, A14
 };
 
-// ============================================================
+const int positions[8] = {
+  0, 1000, 2000, 3000,
+  4000, 5000, 6000, 7000
+};
+
+int sensorMin[8];
+int sensorMax[8];
+
+// =====================================================
 // L298N
-// ============================================================
+// =====================================================
 
-const uint8_t LEFT_IN1 = 3;
-const uint8_t LEFT_IN2 = 5;
-const uint8_t LEFT_PWM = 7;
+const int LEFT_IN1  = 3;
+const int LEFT_IN2  = 5;
+const int RIGHT_IN1 = 2;
+const int RIGHT_IN2 = 4;
 
-const uint8_t RIGHT_IN1 = 2;
-const uint8_t RIGHT_IN2 = 4;
-const uint8_t RIGHT_PWM = 6;
-
-// ============================================================
-// LINE
-// ============================================================
-
-const int POSITION_CENTER = 3500;
-
-// ============================================================
-// SPEED
-// ============================================================
-
-const int BASE_SPEED = 130;
-const int MIN_SPEED = 45;
-const int MAX_SPEED = 200;
-
-const int MAX_CORRECTION = 65;
-
-// ============================================================
+// =====================================================
 // PID
-// ============================================================
+// =====================================================
 
-float Kp = -10;
-float Ki = 0.0;
-float Kd = -0.015;
+float Kp = 1.20;
+float Ki = 0.00;
+float Kd = 0.00;
 
-float previousError = 0;
+const int CENTER = 3500;
+
+float ERROR_EXPONENT = 1.4;
+
 float integral = 0;
+float previousError = 0;
+unsigned long previousTime;
 
-const float INTEGRAL_LIMIT = 2000;
+// =====================================================
+// MOTOR
+// =====================================================
 
-// ============================================================
-// LINE LOST DETECTION
-// ============================================================
+int baseSpeed = 160;
 
-// If all sensors are below this value,
-// we consider the line lost.
-const uint16_t LINE_THRESHOLD = 150;
+const int MAX_SPEED = 255;
+const int MAX_CORRECTION = 298;
 
-// Remember which direction the line was last seen.
-int lastDirection = 0;
+// =====================================================
+// CALIBRATION
+// =====================================================
 
-// ============================================================
-// MOTOR CONTROL
-// ============================================================
+void calibrateSensors() {
+  for (int i = 0; i < 8; i++) {
+    sensorMin[i] = 1023;
+    sensorMax[i] = 0;
+  }
 
-void setMotor(int leftSpeed, int rightSpeed)
-{
-  // ----------------------------------------------------------
-  // BOTH MOTORS ALWAYS FORWARD
-  // ----------------------------------------------------------
-
-  digitalWrite(LEFT_IN1, HIGH);
-  digitalWrite(LEFT_IN2, LOW);
-
-  digitalWrite(RIGHT_IN1, HIGH);
-  digitalWrite(RIGHT_IN2, LOW);
-
-  // ----------------------------------------------------------
-  // SAFETY LIMITS
-  // ----------------------------------------------------------
-
-  leftSpeed = constrain(leftSpeed, MIN_SPEED, MAX_SPEED);
-  rightSpeed = constrain(rightSpeed, MIN_SPEED, MAX_SPEED);
-
-  analogWrite(LEFT_PWM, leftSpeed);
-  analogWrite(RIGHT_PWM, rightSpeed);
-}
-
-// ============================================================
-// SETUP
-// ============================================================
-
-void setup()
-{
-  Serial.begin(115200);
-
-  // ----------------------------------------------------------
-  // MOTOR PINS
-  // ----------------------------------------------------------
-
-  pinMode(LEFT_IN1, OUTPUT);
-  pinMode(LEFT_IN2, OUTPUT);
-  pinMode(LEFT_PWM, OUTPUT);
-
-  pinMode(RIGHT_IN1, OUTPUT);
-  pinMode(RIGHT_IN2, OUTPUT);
-  pinMode(RIGHT_PWM, OUTPUT);
-
-  analogWrite(LEFT_PWM, 0);
-  analogWrite(RIGHT_PWM, 0);
-
-  // ----------------------------------------------------------
-  // QTR
-  // ----------------------------------------------------------
-
-  qtr.setTypeAnalog();
-  qtr.setSensorPins(sensorPins, SensorCount);
-
-  Serial.println();
-  Serial.println("=================================");
-  Serial.println("      QTR-8A LINE FOLLOWER");
-  Serial.println("=================================");
-
-  Serial.println("Move sensors across WHITE + BLACK.");
-  Serial.println("Calibration begins in 2 seconds.");
-
-  delay(2000);
-
-  // ----------------------------------------------------------
-  // CALIBRATION
-  // ----------------------------------------------------------
+  Serial.println("================================");
+  Serial.println("CALIBRATION");
+  Serial.println("Move over WHITE + BLACK");
+  Serial.println("10 seconds");
+  Serial.println("================================");
 
   unsigned long startTime = millis();
 
-  while (millis() - startTime < 10000)
-  {
-    qtr.calibrate();
-    delay(20);
+  while (millis() - startTime < 10000) {
+    for (int i = 0; i < 8; i++) {
+      int reading = analogRead(sensorPins[i]);
+
+      if (reading < sensorMin[i])
+        sensorMin[i] = reading;
+
+      if (reading > sensorMax[i])
+        sensorMax[i] = reading;
+    }
+
+    calibrationAnimation();
   }
 
-  Serial.println("Calibration complete!");
-  Serial.println("Starting in 2 seconds...");
+  calibrationComplete();
 
-  delay(2000);
+  Serial.println("CALIBRATION COMPLETE");
 
-  Serial.println("GO!");
+  for (int i = 0; i < 8; i++) {
+    Serial.print("S");
+    Serial.print(i);
+    Serial.print(" MIN=");
+    Serial.print(sensorMin[i]);
+    Serial.print(" MAX=");
+    Serial.println(sensorMax[i]);
+  }
+
+  Serial.println();
 }
 
-// ============================================================
-// LOOP
-// ============================================================
+// =====================================================
+// LINE POSITION
+// =====================================================
 
-void loop()
-{
-  // ==========================================================
-  // READ SENSORS
-  // ==========================================================
+int getLinePosition() {
+  long weightedSum = 0;
+  long total = 0;
 
-  uint16_t position = qtr.readLineBlack(sensorValues);
+  for (int i = 0; i < 8; i++) {
+    int reading = analogRead(sensorPins[i]);
 
-  // ==========================================================
-  // CHECK WHETHER LINE EXISTS
-  // ==========================================================
+    int value = map(
+      reading,
+      sensorMin[i],
+      sensorMax[i],
+      0,
+      127
+    );
 
-  uint32_t sensorTotal = 0;
+    value = constrain(value, 0, 127);
 
-  for (uint8_t i = 0; i < SensorCount; i++)
-  {
-    sensorTotal += sensorValues[i];
+    weightedSum += (long)value * positions[i];
+    total += value;
   }
 
-  // ----------------------------------------------------------
-  // LINE LOST
-  // ----------------------------------------------------------
+  if (total == 0)
+    return CENTER;
 
-  if (sensorTotal < LINE_THRESHOLD * SensorCount)
-  {
-    // Slowly turn in the direction where the line
-    // was last detected.
+  return weightedSum / total;
+}
 
-    if (lastDirection < 0)
-    {
-      // Last saw line on LEFT
-      setMotor(110, 70);
-    }
-    else if (lastDirection > 0)
-    {
-      // Last saw line on RIGHT
-      setMotor(70, 110);
-    }
-    else
-    {
-      // Don't know where it went
-      setMotor(BASE_SPEED, BASE_SPEED);
-    }
+// =====================================================
+// NONLINEAR ERROR
+// =====================================================
 
-    return;
-  }
+float shapeError(float rawError) {
+  float normalized = rawError / (float)CENTER;
 
-  // ==========================================================
-  // CALCULATE ERROR
-  // ==========================================================
+  normalized = constrain(normalized, -1.0, 1.0);
 
-  float error = (float)position - POSITION_CENTER;
-
-  // Remember direction
-  if (error < -200)
-  {
-    lastDirection = -1;
-  }
-  else if (error > 200)
-  {
-    lastDirection = 1;
-  }
-
-  // ==========================================================
-  // PID
-  // ==========================================================
-
-  integral += error;
-
-  integral = constrain(
-    integral,
-    -INTEGRAL_LIMIT,
-    INTEGRAL_LIMIT
+  float shaped = copysign(
+    pow(abs(normalized), ERROR_EXPONENT),
+    normalized
   );
 
-  float derivative = error - previousError;
+  return shaped * CENTER;
+}
 
-  float correction =
-      (Kp * error) +
-      (Ki * integral) +
-      (Kd * derivative);
+// =====================================================
+// PID
+// =====================================================
 
-  previousError = error;
+float calculatePID(int position) {
+  unsigned long currentTime = micros();
 
-  // ==========================================================
-  // LIMIT CORRECTION
-  // ==========================================================
+  float dt = (currentTime - previousTime) / 1000000.0;
+  previousTime = currentTime;
+
+  if (dt <= 0)
+    dt = 0.001;
+
+  float rawError = CENTER - position;
+  float usedError = shapeError(rawError);
+
+  integral += usedError * dt;
+  integral = constrain(integral, -10000, 10000);
+
+  float derivative = (usedError - previousError) / dt;
+  previousError = usedError;
+
+  return Kp * usedError + Ki * integral + Kd * derivative;
+}
+
+// =====================================================
+// MOTOR CONTROL
+// =====================================================
+
+void setMotor(int in1, int in2, int speed) {
+  speed = constrain(speed, -255, 255);
+
+  if (speed > 0) {
+    analogWrite(in1, speed);
+    digitalWrite(in2, LOW);
+  }
+  else if (speed < 0) {
+    digitalWrite(in1, LOW);
+    analogWrite(in2, -speed);
+  }
+  else {
+    digitalWrite(in1, LOW);
+    digitalWrite(in2, LOW);
+  }
+}
+
+// =====================================================
+// SETUP
+// =====================================================
+
+void setup() {
+  Serial.begin(115200);
+
+  strip.begin();
+  strip.setBrightness(LED_BRIGHTNESS);
+  strip.clear();
+  strip.show();
+
+  pinMode(LEFT_IN1, OUTPUT);
+  pinMode(LEFT_IN2, OUTPUT);
+  pinMode(RIGHT_IN1, OUTPUT);
+  pinMode(RIGHT_IN2, OUTPUT);
+
+  setMotor(LEFT_IN1, LEFT_IN2, 0);
+  setMotor(RIGHT_IN1, RIGHT_IN2, 0);
+
+  delay(1000);
+
+  calibrateSensors();
+
+  previousTime = micros();
+
+  Serial.println("PID START");
+}
+
+// =====================================================
+// LOOP
+// =====================================================
+
+void loop() {
+  int position = getLinePosition();
+
+  float rawError = CENTER - position;
+  float usedError = shapeError(rawError);
+
+  float correction = calculatePID(position);
 
   correction = constrain(
     correction,
@@ -251,67 +313,35 @@ void loop()
     MAX_CORRECTION
   );
 
-  // ==========================================================
-  // MOTOR SPEEDS
-  // ==========================================================
+  // Display current shaped PID error
+  showError(usedError);
 
-  int leftSpeed =
-      BASE_SPEED + correction;
+  int leftSpeed = baseSpeed + correction;
+  int rightSpeed = baseSpeed - correction;
 
-  int rightSpeed =
-      BASE_SPEED - correction;
+  leftSpeed = constrain(leftSpeed, -MAX_SPEED, MAX_SPEED);
+  rightSpeed = constrain(rightSpeed, -MAX_SPEED, MAX_SPEED);
 
-  // ==========================================================
-  // FORWARD ONLY
-  // ==========================================================
+  setMotor(LEFT_IN1, LEFT_IN2, leftSpeed);
+  setMotor(RIGHT_IN1, RIGHT_IN2, rightSpeed);
 
-  leftSpeed = constrain(
-    leftSpeed,
-    MIN_SPEED,
-    MAX_SPEED
-  );
+  Serial.print("POS:");
+  Serial.print(position);
 
-  rightSpeed = constrain(
-    rightSpeed,
-    MIN_SPEED,
-    MAX_SPEED
-  );
+  Serial.print(" RAW:");
+  Serial.print(rawError);
 
-  // ==========================================================
-  // DRIVE
-  // ==========================================================
+  Serial.print(" USED:");
+  Serial.print(usedError);
 
-  setMotor(
-    leftSpeed,
-    rightSpeed
-  );
+  Serial.print(" PID:");
+  Serial.print(correction);
 
-  // ==========================================================
-  // DEBUG
-  // ==========================================================
+  Serial.print(" L:");
+  Serial.print(leftSpeed);
 
-  static unsigned long lastPrint = 0;
+  Serial.print(" R:");
+  Serial.println(rightSpeed);
 
-  if (millis() - lastPrint >= 150)
-  {
-    lastPrint = millis();
-
-    Serial.print("POS=");
-    Serial.print(position);
-
-    Serial.print(" ERROR=");
-    Serial.print(error);
-
-    Serial.print(" CORR=");
-    Serial.print(correction);
-
-    Serial.print(" L=");
-    Serial.print(leftSpeed);
-
-    Serial.print(" R=");
-    Serial.print(rightSpeed);
-
-    Serial.print(" TOTAL=");
-    Serial.println(sensorTotal);
-  }
+  delay(5);
 }
