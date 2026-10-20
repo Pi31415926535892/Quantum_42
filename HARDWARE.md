@@ -63,12 +63,12 @@ Logical index 0 is the **leftmost** sensor when looking forward; index 7 is the 
 
 | Logical index | 0 (left) | 1 | 2 | 3 | 4 | 5 | 6 | 7 (right) |
 |---------------|----------|---|---|---|---|---|---|-----------|
-| MCU pin | A14 | A12 | A10 | A8 | A6 | A4 | A2 | A0 |
+| MCU pin | A0 | A2 | A4 | A6 | A8 | A10 | A12 | A14 |
 
-- **CODE**: `sensorPins[8] = { A14, A12, A10, A8, A6, A4, A2, A0 }` in `Robocup.ino.ino`.
-- **UNVERIFIED — reported 2026-10-20**: connector flipped — OUT1 (leftmost) now lands on
-  A14, OUT8 (rightmost) on A0. The logical order is unchanged, so the pin table reads
-  backwards. The firmware already mirrors this; the bench check is still pending (§8).
+- **CODE**: `sensorPins[8] = { A0, A2, A4, A6, A8, A10, A12, A14 }` in `Robocup.ino.ino`.
+- The harness is **straight-through**: OUT1 (leftmost) → A0, OUT8 (rightmost) → A14.
+  A 2026-10-20 "connector flipped" report was **withdrawn the same day**; the table was
+  restored. Do not reverse it on a report alone — confirm with `j` first (§8).
 
 ### 2.3 Colour / marker sensors — 2 × APDS-9960
 
@@ -138,21 +138,22 @@ updating this table and the sketch together.
 
 ```
    ARDUINO MEGA                         QTR-8A
-   A0  ──────────────────────────────►  OUT8 (rightmost)
-   A2  ──────────────────────────────►  OUT7
-   A4  ──────────────────────────────►  OUT6
-   A6  ──────────────────────────────►  OUT5
-   A8  ──────────────────────────────►  OUT4
-   A10 ──────────────────────────────►  OUT3
-   A12 ──────────────────────────────►  OUT2
-   A14 ──────────────────────────────►  OUT1 (leftmost)
+   A0  ──────────────────────────────►  OUT1 (leftmost)
+   A2  ──────────────────────────────►  OUT2
+   A4  ──────────────────────────────►  OUT3
+   A6  ──────────────────────────────►  OUT4
+   A8  ──────────────────────────────►  OUT5
+   A10 ──────────────────────────────►  OUT6
+   A12 ──────────────────────────────►  OUT7
+   A14 ──────────────────────────────►  OUT8 (rightmost)
    5 V ──────────────────────────────►  VCC
    GND ──────────────────────────────►  GND
                                         LEDON: NOT CONNECTED
 ```
 
-- **Connector flipped 2026-10-20** — the table above is the current wiring. The firmware
-  table was reversed to match (`A14 … A0`); logical index 0 is still the leftmost sensor.
+- **Straight-through wiring**: OUT1 (leftmost) → A0 … OUT8 (rightmost) → A14. A
+  2026-10-20 report that the connector had been flipped was withdrawn the same day and
+  the firmware table was restored; verify with `j` before changing it again.
 - `LEDON` is not connected — correct for the analog QTR-8A, whose emitters run continuously.
 - **Ride height ~11.2 mm** — near the top of the QTR-8A's contrast range. Black/white
   readings are closer together than ideal, so the calibration sweep is mandatory and
@@ -219,7 +220,7 @@ Run these on the bench before any run. Each item names the evidence it produces.
       `w` drives all four forward; `s` brakes. Wrong side ⇒ stop and fix the wiring.
 - [ ] **Pivots:** `l` and `r` pivot in place, and their direction matches the marker
       convention (green on the left → left turn). Record the observed direction.
-- [ ] **Line bar after the flip:** use `j`. With the line under the physical leftmost
+- [ ] **Line bar mapping:** use `j`. With the line under the physical leftmost
       sensor, logical index 0 must read dark; with the line under the rightmost, index 7
       must read dark. Steering must move toward the line, not away.
 - [ ] **Line calibration:** `k`, sweeping the bar over white **and** black for the full
@@ -236,7 +237,7 @@ Run these on the bench before any run. Each item names the evidence it produces.
 | # | Unknown | How to close it |
 |---|---------|-----------------|
 | 1 | ENA/ENB actually held high | Inspect the L298N jumpers / measure EN voltage; wheels turning on `w` is the proof |
-| 2 | Line bar logical-to-physical mapping after the flip | `j` readout with a line under each end (see §8) |
+| 2 | Line bar logical-to-physical mapping | `j` readout with a line under each end (see §8) |
 | 3 | Battery chemistry, capacity, loaded voltage | Read the pack label; meter it under motor load; record here |
 | 4 | Mega supply path on the field | Trace the 5 V wire from L298N to the Mega; record the connector |
 | 5 | Nicla rail EMI / brownout under motor switching | P0 metered run; Option B only on failure |
@@ -250,6 +251,7 @@ Run these on the bench before any run. Each item names the evidence it produces.
 
 | Date | Change | Evidence |
 |------|--------|----------|
-| 2026-10-20 | Line-bar connector flipped: pin table reversed (`A14 … A0`); legacy sketches and the in-repo design removed; this document rewritten with evidence tags | reported; bench pending |
+| 2026-10-20 | Line-flip report **withdrawn**: the table is straight-through `A0 … A14`; firmware restored | reported then retracted; bench mapping unchanged |
+| 2026-10-20 | Legacy sketches and the in-repo design removed; this document rebuilt with evidence tags | code + git history |
 | 2026-10-17 | Motor inputs remapped to D2–D5; ENA/ENB no longer driven by the sketch | **CODE** |
 | 2026-10-18 | L298N verified: `w` drove all four wheels forward, `l`/`r` pivots matched the marker convention | **BENCH** |

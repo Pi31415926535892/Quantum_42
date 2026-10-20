@@ -75,8 +75,8 @@ def main() -> int:
     # --- Line bar -------------------------------------------------------
     m = re.search(r"sensorPins\[8\]\s*=\s*\{(.*?)\};", sketch, re.S)
     pins = re.findall(r"A\d+", m.group(1)) if m else []
-    expected = ["A14", "A12", "A10", "A8", "A6", "A4", "A2", "A0"]
-    check("firmware line bar is left-to-right A14..A0", pins == expected, ",".join(pins))
+    expected = ["A0", "A2", "A4", "A6", "A8", "A10", "A12", "A14"]
+    check("firmware line bar is left-to-right A0..A14", pins == expected, ",".join(pins))
     for pin in expected:
         check(f"HARDWARE.md lists line pin {pin}", f"| {pin} |" in hw)
 
