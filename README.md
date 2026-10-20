@@ -27,7 +27,11 @@ the heist artifacts stay in `docs/gangsta/`.
 
 ```sh
 ./test/run_tests.sh        # Nicla host tests (python3 unittest); must exit 0
+./scripts/check-hardware.py  # HARDWARE.md vs firmware pin map; must exit 0
 ```
+
+`check-hardware.py` reads the firmware repo's `Robocup.ino.ino` (override with
+`FIRMWARE_DIR=...`) and fails if the document and the sketch disagree about a pin.
 
 Mega firmware (separate repo):
 

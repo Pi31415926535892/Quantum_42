@@ -1,283 +1,255 @@
 # Team Quantum 42 — Hardware Specifications
 
-RoboCup Junior line-follower-with-rescue platform.
+RoboCup Junior Rescue Line 2026 platform. **One robot, one configuration.**
+
+> **Read this first — this file exists to stop pin hallucinations.**
+>
+> 1. **Every claim carries an evidence tag.**
+>    - **CODE** — read directly from the firmware repo's `Robocup.ino.ino` / headers;
+>      the constant name is given.
+>    - **BENCH** — measured or observed on the physical robot, with the date.
+>    - **UNVERIFIED** — believed but not measured. Treat it as a hypothesis, not a fact.
+> 2. **Authority order.** The physical robot is the ground truth → this file records it
+>    → the firmware constants must match it. If code and this file disagree, **stop,
+>    measure, and fix one**. Never pick the convenient version. Run
+>    `scripts/check-hardware.py` after any pin change; it fails loudly on drift.
+> 3. **No legacy designs.** Configurations that no longer ship are not described here.
+>    The removed in-repo design and bench sketches are in git history (snapshot
+>    commit `3450fff`); do not treat their pins as current.
+> 4. **Adding hardware?** Add its pin, its evidence tag, and a checklist item in the
+>    same change. A pin with no owner is how the next person guesses.
+>
+> Firmware source of truth: `~/Documents/Arduino/Robocup.ino/Robocup.ino.ino`
+> (and the headers beside it). This document never silently overrides the code.
 
 ## 1. Bill of Materials
 
-| Component | Part | Qty | Notes |
-|-----------|------|-----|-------|
-| Controller | Arduino Mega 2560 Pro (ATmega2560) | 1 | 8+ analog inputs required (A0–A14) |
-| Motor driver | L298N dual H-bridge | 1 | Channels A and B; 2 motors per channel |
-| Motors | BIO DC gear motors (4 total) | 4 | **Left pair on Ch B**, right pair on Ch A |
-| Line sensor | Pololu QTR-8A (analog reflectance, 8 channels) | 1 | IR LED emitters always on in analog mode |
-| Marker sensors | APDS-9960 reflective color/proximity (I2C) | 2 | Detect 25 mm green intersection markers; **fixed I2C addr 0x39** → I2C mux required (§9) |
-| I2C mux | TCA9548A 8-channel | 1 | Gives each APDS-9960 its own bus channel (addr 0x70 default) |
-| Power | See §5 | — | Logic supply + motor supply + common ground |
+| Component | Part | Qty | Notes / evidence |
+|-----------|------|-----|------------------|
+| Controller | Arduino Mega 2560 Pro (ATmega2560) | 1 | 16 analog inputs; 8 are used by the line bar |
+| Motor driver | L298N dual H-bridge module | 1 | Ch A = RIGHT pair, Ch B = LEFT pair — **BENCH 2026-10-18** |
+| Motors | BIO DC gear motor | 4 | Two per channel, paralleled; no encoder inputs in the sketch |
+| Line sensor | Pololu QTR-8A analog reflectance bar | 1 | 8 channels; emitters always on; ~11.2 mm ride height — **BENCH** |
+| Marker sensors | APDS-9960 RGB / proximity | 2 | Both at I²C `0x39`; LEFT on hardware I²C, RIGHT on software I²C — **CODE** |
+| LED strip | WS2812B, 12 pixels | 1 | Data D35; pixels 0–7 display, 8–11 illumination — **CODE** |
+| Coprocessor | Arduino Nicla Vision | 1 | Camera / ToF / IMU. **Not linked by the current sketch** — see §7 |
+| Power | Battery → L298N 12 V; L298N 5 V logic rail | 1 | Battery chemistry and capacity are **not recorded** — see §9 |
 
-## 2. Microcontroller ↔ L298N Wiring (Drivetrain)
+**Not used by the current sketch** (do not infer pins for them from old commits):
+TCA9548A I²C mux, bumpers, reflectivity/conductivity probes, servos, start button.
+If any of these return, give it a pin row here and code that reads it.
 
-Wired by hand (ground truth; current pin constants live in the firmware repo's `Robocup.ino.ino` — the legacy in-repo sketches were removed 2026-10-20):
+## 2. Complete Pin Map
 
-| MCU pin | L298N terminal | Channel | Physical role | Code constant (current) | PWM? |
-|---------|----------------|---------|---------------|-------------------------|------|
-| D7 | ENA | Ch A | RIGHT enable | `LEFT_PWM` = 7 ⚠ | Yes |
-| D6 | ENB | Ch B | LEFT enable | `RIGHT_PWM` = 6 ⚠ | Yes |
-| D3 | IN1 | Ch A | RIGHT input 1 | `LEFT_IN1` = 3 ⚠ | No |
-| D5 | IN2 | Ch A | RIGHT input 2 | `LEFT_IN2` = 5 ⚠ | No |
-| D4 | IN3 | Ch B | LEFT input 1 | `RIGHT_IN2` = 4 ⚠ | No |
-| D2 | IN4 | Ch B | LEFT input 2 | `RIGHT_IN1` = 2 ⚠ | No |
+### 2.1 Drivetrain — L298N
 
-⚠ = code constant name does NOT match the physical wheel it actually drives
-(see §6).
+| Function | MCU pin | Firmware constant | Evidence |
+|----------|---------|-------------------|----------|
+| LEFT channel input 1 | D2 | `LEFT_IN1 = 2` | **CODE**; forward direction **BENCH 2026-10-18** |
+| LEFT channel input 2 | D3 | `LEFT_IN2 = 3` | **CODE** |
+| RIGHT channel input 1 | D4 | `RIGHT_IN1 = 4` | **CODE**; forward direction **BENCH 2026-10-18** |
+| RIGHT channel input 2 | D5 | `RIGHT_IN2 = 5` | **CODE** |
+| LEFT enable (ENB) | — | not driven | Must be held HIGH — **UNVERIFIED** |
+| RIGHT enable (ENA) | — | not driven | Must be held HIGH — **UNVERIFIED** |
 
-Motor grouping:
-- **LEFT drive** → L298N channel **B** outputs (OUT3/OUT4), 2 BIO motors wired in parallel.
-- **RIGHT drive** → L298N channel **A** outputs (OUT1/OUT2), 2 BIO motors wired in parallel.
+The sketch PWM-modulates the four **IN** lines (`analogWrite` on D2–D5). It does not
+configure ENA/ENB. On most L298N modules the enable inputs are held high by the onboard
+5 V-EN jumper; if those jumpers are missing, **the wheels will never turn**. Check this
+before diagnosing anything else.
 
-L298N forward convention: channel is forward when input-1 = HIGH and input-2 = LOW
-(`IN1=1/IN2=0` on Ch A, `IN3=1/IN4=0` on Ch B).
+### 2.2 Line bar — QTR-8A
 
-## 3. System Wiring Diagram (ASCII)
+Logical index 0 is the **leftmost** sensor when looking forward; index 7 is the rightmost.
 
-Overview:
+| Logical index | 0 (left) | 1 | 2 | 3 | 4 | 5 | 6 | 7 (right) |
+|---------------|----------|---|---|---|---|---|---|-----------|
+| MCU pin | A14 | A12 | A10 | A8 | A6 | A4 | A2 | A0 |
+
+- **CODE**: `sensorPins[8] = { A14, A12, A10, A8, A6, A4, A2, A0 }` in `Robocup.ino.ino`.
+- **UNVERIFIED — reported 2026-10-20**: connector flipped — OUT1 (leftmost) now lands on
+  A14, OUT8 (rightmost) on A0. The logical order is unchanged, so the pin table reads
+  backwards. The firmware already mirrors this; the bench check is still pending (§8).
+
+### 2.3 Colour / marker sensors — 2 × APDS-9960
+
+Both sensors answer at address `0x39`; they use **separate buses instead of a mux**.
+
+| Function | MCU pin | Firmware | Evidence |
+|----------|---------|----------|----------|
+| LEFT APDS SDA | D20 | hardware `Wire` | **CODE** |
+| LEFT APDS SCL | D21 | hardware `Wire` | **CODE** |
+| RIGHT APDS SDA | D30 | `SoftWire softWire(30, 31)` | **CODE** |
+| RIGHT APDS SCL | D31 | `SoftWire softWire(30, 31)` | **CODE** |
+
+- The APDS-9960 is a **3.3 V** part. Level shifting / pull-ups: **UNVERIFIED** on the
+  current harness — inspect the breakout before adding anything to the bus.
+- Register setup in code: RGBC mode, `ATIME = 0xFC` (≈10 ms), `CONTROL = 0x01` (4× gain).
+- There is **no TCA9548A mux** in the current build. The old mux section was removed;
+  re-adding a mux means changing both the sketch and this file.
+
+### 2.4 LED strip — WS2812B
+
+| Function | MCU pin | Firmware | Evidence |
+|----------|---------|----------|----------|
+| Data | D35 | `Adafruit_NeoPixel strip(12, 35, NEO_GRB + NEO_KHZ800)` | **CODE** |
+| Power | 5 V | — | Source not recorded — **UNVERIFIED** |
+| Ground | common ground | — | **BENCH** (required for data) |
+
+- 12 pixels: 0–7 are the display (PID error dot, green marks), 8–11 are always-on white
+  illumination for the colour sensors.
+- Brightness levels: display `40`, illumination `127` (0–255) — **CODE**.
+- Keep the illuminators on during any colour/line calibration; they are part of the run
+  condition, not a bench convenience.
+
+### 2.5 Serial and reserved pins
+
+| Function | MCU pin | Evidence |
+|----------|---------|----------|
+| USB serial (bench console + log dump) | USB, **115200 baud** | **CODE**: `Serial.begin(115200)` |
+| Nicla link, planned | D18 (TX1) / D19 (RX1) + BSS138 shifter | **UNVERIFIED / not implemented** — see §7 |
+
+Do not reuse D2–D5, D18–D21, D30–D31, D35 or A0/A2/A4/A6/A8/A10/A12/A14 without
+updating this table and the sketch together.
+
+## 3. Drivetrain Wiring
 
 ```
-  ┌─────────────┐   ┌─────────────┐   ┌──────────────────┐
-  │   ARDUINO   │   │    L298N    │   │  BIO MOTOR PAIR  │
-  │ MEGA 2560   │◄─►│             │──►│  Ch A / RIGHT    │
-  │     PRO     │   │             │   ├──────────────────┤
-  │             │   │             │──►│  Ch B / LEFT     │
-  │             │   └─────────────┘   └──────────────────┘
-  │             │   ┌─────────────┐
-  │             │◄─►│   QTR-8A    │   IR reflectance, ~11.2 mm above floor
-  └─────────────┘   └─────────────┘
+   ARDUINO MEGA                         L298N                        MOTORS
+   D2  ──────────────────────────────►  IN3  (Ch B)  ── OUT3/OUT4 ──►  LEFT pair
+   D3  ──────────────────────────────►  IN4  (Ch B)
+   D4  ──────────────────────────────►  IN1  (Ch A)  ── OUT1/OUT2 ──►  RIGHT pair
+   D5  ──────────────────────────────►  IN2  (Ch A)
+   ENB ── held HIGH (not from MCU) ───► ENB
+   ENA ── held HIGH (not from MCU) ───► ENA
+   GND ──────────────────────────────►  GND ───────────────────────────  common ground
 ```
 
-Drivetrain — Mega ⇄ L298N ⇄ motors:
+- **Forward on a channel** = input 1 HIGH/PWM, input 2 LOW
+  (`IN1=1/IN2=0` on Ch A, `IN3=1/IN4=0` on Ch B).
+- **Brake** = both inputs HIGH (`stopMotors()` does exactly this). Both LOW is a coast —
+  the robot keeps rolling, which is how junctions were previously missed.
+- The L298N silkscreen and the robot's sides are **crossed**: Ch A (OUT1/OUT2) drives
+  the physical RIGHT wheels, Ch B (OUT3/OUT4) the physical LEFT. The firmware names
+  follow the robot, not the silkscreen. Do not "fix" this by renaming.
+- Bench keys: `1`/`2` = left wheel forward/reverse, `3`/`4` = right wheel forward/reverse,
+  `w` = both forward, `s` = stop.
+
+## 4. Line Bar — QTR-8A Wiring
 
 ```
-  ┌─────────────────────────┐       ┌──────────────────────────────┐
-  │      ARDUINO MEGA       │       │            L298N             │
-  │          PRO            │       │                              │
-  │  D7 (PWM) ────────────►├─ ENA ─►│  Ch A (physical RIGHT):      │
-  │  D3      ────────────►├─ IN1 ─►│  ENA │ IN1 │ IN2             │
-  │  D5      ────────────►├─ IN2 ─►│  OUT1 ──► RIGHT BIO x2       │
-  │                         │       │  OUT2 ──► RIGHT BIO x2       │
-  │  D6 (PWM) ────────────►├─ ENB ─►│                              │
-  │  D4      ────────────►├─ IN3 ─►│  Ch B (physical LEFT):        │
-  │  D2      ────────────►├─ IN4 ─►│  ENB │ IN3 │ IN4              │
-  │                         │       │  OUT3 ──► LEFT BIO x2        │
-  │                         │       │  OUT4 ──► LEFT BIO x2        │
-  │  GND ────────────────►├─ GND ─►│  GND                          │
-  └─────────────────────────┘       └──────────────────────────────┘
+   ARDUINO MEGA                         QTR-8A
+   A0  ──────────────────────────────►  OUT8 (rightmost)
+   A2  ──────────────────────────────►  OUT7
+   A4  ──────────────────────────────►  OUT6
+   A6  ──────────────────────────────►  OUT5
+   A8  ──────────────────────────────►  OUT4
+   A10 ──────────────────────────────►  OUT3
+   A12 ──────────────────────────────►  OUT2
+   A14 ──────────────────────────────►  OUT1 (leftmost)
+   5 V ──────────────────────────────►  VCC
+   GND ──────────────────────────────►  GND
+                                        LEDON: NOT CONNECTED
 ```
 
-Sensor — Mega ⇄ QTR-8A:
+- **Connector flipped 2026-10-20** — the table above is the current wiring. The firmware
+  table was reversed to match (`A14 … A0`); logical index 0 is still the leftmost sensor.
+- `LEDON` is not connected — correct for the analog QTR-8A, whose emitters run continuously.
+- **Ride height ~11.2 mm** — near the top of the QTR-8A's contrast range. Black/white
+  readings are closer together than ideal, so the calibration sweep is mandatory and
+  the base speed may need to stay low.
+- Calibration: 10 s boot sweep over **white + black + green**; `k` re-runs it. Sweeping
+  only one surface produces a degenerate `min ≈ max` calibration.
+- The sketch reads the bar with plain `analogRead`; there is **no QTRSensors library** in
+  this firmware.
 
-```
-  ┌─────────────────────────┐       ┌──────────────────────────────┐
-  │      ARDUINO MEGA       │       │           QTR-8A             │
-  │          PRO            │       │  (IR emitters always on)     │
-  │  A0  ──────────────────►├──────►│ OUT8 (rightmost)             │
-  │  A2  ──────────────────►├──────►│ OUT7                         │
-  │  A4  ──────────────────►├──────►│ OUT6                         │
-  │  A6  ──────────────────►├──────►│ OUT5                         │
-  │  A8  ──────────────────►├──────►│ OUT4                         │
-  │  A10 ──────────────────►├──────►│ OUT3                         │
-  │  A12 ──────────────────►├──────►│ OUT2                         │
-  │  A14 ──────────────────►├──────►│ OUT1 (leftmost)              │
-  │  5V  ──────────────────►├──────►│ VCC                          │
-  │  GND ──────────────────►├──────►│ GND                          │
-  └─────────────────────────┘       │ LEDON: NOT CONNECTED         │
-                                    └──────────────────────────────┘
-```
+## 5. LED Strip
 
-Power:
+- 12 × WS2812B on **D35**, GRB order, 800 kHz.
+- Pixels 0–7: PID error dot (white), green marks at the outer pixels when a marker is seen,
+  whole display green during a marker turn, red failure cue.
+- Pixels 8–11: always-on white illumination over the colour sensors.
+- Power source and current budget are **not recorded**. Do not assume the Mega's 5 V
+  regulator can carry the strip; meter it before changing brightness or pixel count.
 
-```
-  Battery 7–12 V ──► L298N 12 V pin (motor supply, drives BIO motors)
-  5 V logic supply ──► L298N 5 V pin ──► QTR-8A VCC
-  GND: Mega + L298N + QTR-8A + battery ── ALL TIED TOGETHER.
-       (Missing common ground = motors buzz or nothing moves.)
-```
+## 6. Marker Detection Notes
 
-## 4. Microcontroller ↔ QTR-8A Wiring (Sensor)
+- Rule geometry: 25 mm green squares beside the line. Green on one side arms a turn that
+  way; green on both sides means dead end / U-turn; none means straight.
+- The illuminators (pixels 8–11) light the colour sensors, so they are part of the
+  optical path — do not switch them off to "help" detection.
+- Thresholds are **derived at boot** from the same sweep as the line calibration; a failed
+  colour calibration falls back to the hand-tuned constants and lights the red failure cue.
+- Bench readout: `g` prints `GRN L=… R=… conf LR`; `c` clears the held peak samples.
+- Mounting height/geometry is **not recorded** — do not quote a number until it is measured.
 
-**The bar's connector was flipped on 2026-10-20** (Don, bench rewiring): OUT1
-(leftmost) now lands on A14 and OUT8 (rightmost) on A0. The logical order is
-unchanged — index 0 is still the leftmost sensor — so the firmware's pin table
-reads the flattened analog row backwards.
+## 7. Power, Ground, and Nicla
 
-| QTR-8A output | Position | MCU pin |
-|---------------|----------|---------|
-| OUT1 (leftmost) | weight 0 | A14 |
-| OUT2 | | A12 |
-| OUT3 | | A10 |
-| OUT4 | | A8 |
-| OUT5 | | A6 |
-| OUT6 | | A4 |
-| OUT7 | | A2 |
-| OUT8 (rightmost) | weight 7000 | A0 |
+- **Motor supply:** battery → L298N `12 V` terminal (drives the four BIO motors). The
+  L298N accepts 5–35 V; **the pack's actual chemistry/voltage is unrecorded** — see §9.
+- **Logic supply:** L298N `5 V` output → QTR-8A VCC and the logic rail. On the bench the
+  Mega is powered over USB instead; on the field the L298N rail powers it. **BENCH.**
+- **Common ground** across Mega, L298N, QTR-8A, APDS-9960s, LED strip and battery is
+  mandatory. A missing ground shows up as buzzing motors or a dead bus, not a clean failure.
+- **Battery chemistry, capacity and loaded voltage are not recorded** — measure and write
+  them here before quoting runtime or tuning pivots.
 
-- `LEDON`: **not connected** — correct. The QTR-8A analog variant runs its IR emitters continuously; there is no emitter control pin to drive.
-- `VCC`: connect to 5 V (logic). `GND`: common ground with controller and driver.
-- **Sensing height: ~11.2 mm above the floor.** Working but near the upper end of the
-  QTR-8A's contrast range — black/white readings get closer together, so the calibration
-  sweep over both colors (§7) is essential, and expect to tune `BASE_SPEED` lower.
-
-Configuration in code (`Robocup.ino.ino`, logical order left → right):
-
-```cpp
-const int sensorPins[8] = {
-  A14, A12, A10, A8,
-  A6, A4, A2, A0
-};
-```
-
-## 5. Power & Ground
-
-- L298N logic supply (VS logic / 5 V rail) powers the driver logic and MUST share a common **GND** with the Mega.
-- Motor supply (VS, typically 7–12 V) powers the BIO motors through the L298N.
-- Common ground between: Mega, L298N, QTR-8A, and the motor supply. Missing ground = motors buzzing/slow or nothing moving.
-
-### Nicla power — Option A (PROVISIONAL, UNVERIFIED)
+### Nicla Vision power — Option A (PROVISIONAL, UNVERIFIED)
 
 **Decision (Don, 2026-10-01): Option A is locked provisionally, pending the P0 EMI
 measurement (motors running → Nicla rail).**
 
-- **Option A (chosen now):** Nicla Vision powered from the shared battery through a dedicated
-  **ferrite + LC filtered** branch into its 3.3 V LDO. Must share common ground with the rest of
-  the system. This is the contract FR-023 primary design.
-- **Option B (auto-promotes ONLY if P0 EMI fails):** dedicated Li-Po feeding the Nicla directly.
-  Under Option B the Nicla survives a main-rail cut with stale state and is a distinct,
-  documented restart path.
-- 2.4 GHz radios compile-time disabled for the match window.
-- ⚠ **UNVERIFIED until the P0 metered run (motors running → Nicla rail).** If the run shows the
-  filtered shared rail failing the Nicla's supply/brownout tolerance, flip to Option B and record
-  the measurement + decision here.
+- **Option A (current):** Nicla powered from the shared battery through a dedicated
+  **ferrite + LC filtered** branch into its 3.3 V LDO, with common ground.
+- **Option B (auto-promotes only if P0 EMI fails):** dedicated Li-Po feeding the Nicla
+  directly; the Nicla then survives a main-rail cut with stale state.
+- 2.4 GHz radios are compile-time disabled for the match window.
+- ⚠️ **UNVERIFIED** until the P0 metered run. Record the measurement and the decision here.
+- The **link is not implemented**: the current sketch has no `Serial1` code. The planned
+  wiring is Mega TX1 = D18 → Nicla RX, Mega RX1 = D19 ← Nicla TX, through a BSS138
+  level shifter (see `docs/mega-nicla-protocol.md`). Do not assume the Nicla is talking
+  to the Mega until that code exists and the link is bench-soaked.
 
-## 6. Known Wiring Discrepancy — legacy sketches (HISTORICAL, 2026-10-20)
+## 8. Pre-Race Verification Checklist
 
-> **Status:** the two sketches this section described (`Robocup.ino` and
-> `PWM Test`) were removed on 2026-10-20. The active firmware lives in the
-> firmware repo and names every LEFT/RIGHT constant by the physical side it
-> drives. This section is retained as the record of the original defect and the
-> reasoning that fixed it; the constant table below no longer describes the
-> shipped code.
+Run these on the bench before any run. Each item names the evidence it produces.
 
-Physical fact: **the LEFT motor pair is wired to channel B, the RIGHT pair to channel A.**
+- [ ] **Enable jumpers:** ENA and ENB are HIGH (module jumpers fitted or wired to 5 V).
+      Without them `1`–`4`/`w` do nothing.
+- [ ] **Wheels:** `1`/`2` spin the LEFT wheel forward/reverse; `3`/`4` the RIGHT;
+      `w` drives all four forward; `s` brakes. Wrong side ⇒ stop and fix the wiring.
+- [ ] **Pivots:** `l` and `r` pivot in place, and their direction matches the marker
+      convention (green on the left → left turn). Record the observed direction.
+- [ ] **Line bar after the flip:** use `j`. With the line under the physical leftmost
+      sensor, logical index 0 must read dark; with the line under the rightmost, index 7
+      must read dark. Steering must move toward the line, not away.
+- [ ] **Line calibration:** `k`, sweeping the bar over white **and** black for the full
+      10 s. Check the printed `MIN/MAX` per sensor: all eight ranges must be usable, not
+      `min ≈ max`.
+- [ ] **Markers:** `g`, one green square under each flank. `conf` must show the correct
+      side, and the grey floor / black tape must not confirm.
+- [ ] **Ground:** continuity between Mega GND, L298N GND, QTR GND and battery negative.
+- [ ] **Nicla rail:** P0 EMI measurement with the motors running; record it in §7.
+- [ ] **Record the date and result** next to the item. An unrecorded pass is not evidence.
 
-Code constants, however, assign every `LEFT*` constant to Ch A pins and every `RIGHT*`
-constant to Ch B pins:
+## 9. Known Unknowns — Do Not Assume
 
-| Code constant (current) | Pin | Actual terminal | Actually drives |
-|-------------------------|-----|-----------------|-----------------|
-| `LEFT_PWM` = 7          | D7  | ENA (Ch A)      | RIGHT wheels ⚠ |
-| `LEFT_IN1` = 3          | D3  | IN1 (Ch A)      | RIGHT wheels ⚠ |
-| `LEFT_IN2` = 5          | D5  | IN2 (Ch A)      | RIGHT wheels ⚠ |
-| `RIGHT_PWM` = 6         | D6  | ENB (Ch B)      | LEFT wheels ⚠ |
-| `RIGHT_IN2` = 4         | D4  | IN3 (Ch B)      | LEFT wheels ⚠ |
-| `RIGHT_IN1` = 2         | D2  | IN4 (Ch B)      | LEFT wheels ⚠ |
+| # | Unknown | How to close it |
+|---|---------|-----------------|
+| 1 | ENA/ENB actually held high | Inspect the L298N jumpers / measure EN voltage; wheels turning on `w` is the proof |
+| 2 | Line bar logical-to-physical mapping after the flip | `j` readout with a line under each end (see §8) |
+| 3 | Battery chemistry, capacity, loaded voltage | Read the pack label; meter it under motor load; record here |
+| 4 | Mega supply path on the field | Trace the 5 V wire from L298N to the Mega; record the connector |
+| 5 | Nicla rail EMI / brownout under motor switching | P0 metered run; Option B only on failure |
+| 6 | Nicla link | Not implemented in the sketch; implement `Serial1` + shifter, then soak |
+| 7 | APDS-9960 pull-ups / level shifting | Inspect the breakouts; scope SDA/SCL if reads are flaky |
+| 8 | Marker sensor mounting height | Measure; record before quoting detection geometry |
+| 9 | LED strip 5 V source and current budget | Meter the strip; do not assume the Mega rail can carry it |
+| 10 | QTR contrast at 11.2 mm | Read the calibration `MIN/MAX`; if the spread is small, lower the bar |
 
-Two consequences:
+## Change Log
 
-1. **PWM channels are swapped.** In `setMotor()`, `analogWrite(LEFT_PWM…)` sends `leftSpeed`
-   to Ch A = the physical RIGHT wheels, and `analogWrite(RIGHT_PWM…)` sends `rightSpeed`
-   to Ch B = the physical LEFT wheels. The two channels drive crosswise.
-2. **Ch B (left pair) is driven in reverse.** L298N forward on Ch B is `IN3=1/IN4=0`.
-   The code drives `IN4=D2 HIGH` and `IN3=D4 LOW` → `IN3=0/IN4=1` = reverse. So the left
-   pair spins BACKWARD. Combined with (1), an equal `150,150` command spins the robot in
-   place instead of driving forward.
-
-Fix (historical — was applied in the removed sketches) — swap the constants so names
-match the physical wheels and each channel is driven forward:
-
-```cpp
-const uint8_t LEFT_IN1  = 4;   // IN3  (Ch B input 1) — physical LEFT
-const uint8_t LEFT_IN2  = 2;   // IN4  (Ch B input 2)
-const uint8_t LEFT_PWM  = 6;   // ENB  (Ch B enable)
-
-const uint8_t RIGHT_IN1 = 3;   // IN1  (Ch A input 1) — physical RIGHT
-const uint8_t RIGHT_IN2 = 5;   // IN2  (Ch A input 2)
-const uint8_t RIGHT_PWM = 7;   // ENA  (Ch A enable)
-```
-
-After re-mapping, `setMotor()` drives `LEFT_IN1=4 HIGH / LEFT_IN2=2 LOW`
-(`IN3=1/IN4=0` = Ch B forward) and `RIGHT_IN1=3 HIGH / RIGHT_IN2=5 LOW`
-(`IN1=1/IN2=0` = Ch A forward).
-
-Confirm polarity with §7 before running line following. If one side still spins
-backward after the re-map, swap that channel's two IN constants (or its two motor leads).
-
-Note: with the constants fixed to their physical channels, the standard convention applies
-again — line on the right (`error > 0`) must make the LEFT wheel faster, which requires a
-**positive** `Kp`. Current `Kp = -10` is the wrong sign for the corrected wiring.
-
-## 7. Pre-Race Verification Checklist
-
-Flash the firmware repo's sketch and use its serial bench commands (`1`–`4` single
-wheels, `w` both forward, `l`/`r` pivots, `p` creep pulse, `v` whole smart turn).
-
-- [ ] `150,150` — robot drives **straight forward**. If it turns/spins → §6 not fully applied (channels crossed and/or one side reversed).
-- [ ] `150,-150` — robot pivots **in place**, and confirm which way: left-wheel forward = clockwise.
-- [ ] `-150,150` — pivot opposite direction.
-- [ ] `150,50` — robot arcs; confirm the arc direction matches which wheel has the higher speed.
-- [ ] Record the "wheel A faster ⇒ physical turn direction" result; it determines the
-      correct `Kp` sign in the firmware repo's sketch.
-- [ ] During calibration, physically sweep the sensors over **both black and white** for
-      the full 10 s window.
-- [ ] Confirm the track is a **black line on white** (`readLineBlack` is correct).
-
-## 8. Tuning Reference (historical — removed design)
-
-> The values below belonged to the in-repo design removed on 2026-10-20. Tuning
-> now lives in the firmware repo's sketch, which is the single source of truth.
-
-| Constant | Value | Note |
-|----------|-------|------|
-| `POSITION_CENTER` | 3500 | Center of 0–7000 sensor range |
-| `BASE_SPEED` | 130 | Start tuning lower (~80) |
-| `MIN_SPEED` / `MAX_SPEED` | 45 / 200 | PWM bounds |
-| `MAX_CORRECTION` | 65 | Steering cap |
-| `Kp` | -10 | Wrong sign for corrected wiring (must be positive) + magnitude ~500× too large (§6/§7) |
-| `Ki` | 0.0 | Disabled |
-| `Kd` | -0.015 | Keep at 0 until P-term tracks |
-| `LINE_THRESHOLD` | 150 | Line-lost detection (calibrated 0–1000 scale) |
-
-## 9. Green-Marker Sensors — APDS-9960 × 2 (I2C via TCA9548A)
-
-Detect the **25 mm green intersection/dead-end markers** that sit beside the black line
-(2026 rules): green on one side → turn that way, green on both sides → dead end (U-turn),
-none → straight. Two downward-facing APDS-9960 units (one each side of the line) on the Mega's
-I2C bus through a TCA9548A mux — each APDS-9960 answers only at address `0x39`, so two cannot
-share one bus directly.
-
-| Item | Qty | Notes |
-|------|-----|-------|
-| APDS-9960 breakout (Adafruit or SparkFun) | 2 | RGB + proximity + gesture; 3.3 V logic |
-| TCA9548A mux | 1 | default addr `0x70`; **CH0 = LEFT sensor, CH1 = RIGHT sensor** |
-
-Wiring:
-
-```
-  ┌─────────────────────────┐   ┌──────────────────────────────────────────────┐
-  │      ARDUINO MEGA       │   │                I2C — 3.3 V logic               │
-  │          PRO            │   │                                                │
-  │  SDA ──── D20 ──────────┼──►├── TCA9548A (mux, addr 0x70)                   │
-  │  SCL ──── D21 ──────────┼──►├──   ├─ CH0 ──► APDS-9960 #1  = LEFT side       │
-  │                          │   ├──   ├─ CH1 ──► APDS-9960 #2  = RIGHT side     │
-  │  3.3V ──────────────────►├──►├── VCC (3.3 V)                                  │
-  │  GND ───────────────────►├──►├── GND                                          │
-  └─────────────────────────┘   └──────────────────────────────────────────────┘
-```
-
-- The APDS-9960s and the mux run at **3.3 V**. I2C is open-drain: pull SDA/SCL to 3.3 V (Mega
-  HIGH threshold ≈ 3.0 V, so 3.3 V highs register; if flaky, insert a BSS138 bidirectional
-  level shifter on SDA/SCL).
-- Read pattern: select the mux channel → read that sensor → deselect (`0x00`). One sensor at a
-  time; the `tcaselect()` helper (Adafruit mux guide) is the template.
-- Mount ~1–2 cm off the floor, just beside the line where a 25 mm marker would sit while the
-  QTR-8A tracks the line. RGB mode is passive → calibrate the green/white threshold during the
-  10 s sweep; keep the proximity IR LED disabled unless validated (it can see the QTR's own IR).
-- Code constants (sketch): `TCA_ADDR 0x70`, `MARKER_LEFT_CH = 0`, `MARKER_RIGHT_CH = 1`.
-- Ground: all tied together per §5.
+| Date | Change | Evidence |
+|------|--------|----------|
+| 2026-10-20 | Line-bar connector flipped: pin table reversed (`A14 … A0`); legacy sketches and the in-repo design removed; this document rewritten with evidence tags | reported; bench pending |
+| 2026-10-17 | Motor inputs remapped to D2–D5; ENA/ENB no longer driven by the sketch | **CODE** |
+| 2026-10-18 | L298N verified: `w` drove all four wheels forward, `l`/`r` pivots matched the marker convention | **BENCH** |

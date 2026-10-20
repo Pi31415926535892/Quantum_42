@@ -3,6 +3,12 @@
 Status: ratification draft — single source of truth for the UART link between the
 Arduino Mega 2560 Pro (host / real-time base) and the Arduino Nicla Vision (perception
 daughter) of the Quantum 42 rescue robot.
+
+> **Implementation status (2026-10-20):** the Nicla side exists in `nicla/link.py`.
+> The active Mega sketch does **not** implement this link yet (no `Serial1` code), so
+> D18/D19 are reserved, not proven. Treat this document as the design contract, not as
+> evidence that the two boards are talking.
+
 Every numeric value, field, scale, and constant in this document is **normative**. Two
 independent implementations (Arduino C++ side and MicroPython side) are expected to
 interoperate from this text alone; where a hex example appears, it is directly assertable
