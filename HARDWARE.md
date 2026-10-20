@@ -223,14 +223,17 @@ Run these on the bench before any run. Each item names the evidence it produces.
       `w` drives all four forward; `s` brakes. Wrong side ⇒ stop and fix the wiring.
 - [ ] **Pivots:** `l` and `r` pivot in place, and their direction matches the marker
       convention (green on the left → left turn). Record the observed direction.
-- [ ] **Line bar mapping:** use `j`. With the line under the physical leftmost
-      sensor, logical index 0 must read dark; with the line under the rightmost, index 7
-      must read dark. Steering must move toward the line, not away.
+- [ ] **Live readout:** `d` streams every sensor at 10 Hz — line raw/blackness,
+      position, dark/edge/junction, PID + wheel commands, and both APDS flows — without
+      stopping the motors. Use it while nudging the bar; send `s` first for a static read.
+- [ ] **Line bar mapping:** use `j` (or the `d` line). With the line under the physical
+      leftmost sensor, logical index 0 must read dark; with the line under the rightmost,
+      index 7 must read dark. Steering must move toward the line, not away.
 - [ ] **Line calibration:** `k`, sweeping the bar over white **and** black for the full
       10 s. Check the printed `MIN/MAX` per sensor: all eight ranges must be usable, not
       `min ≈ max`.
-- [ ] **Markers:** `g`, one green square under each flank. `conf` must show the correct
-      side, and the grey floor / black tape must not confirm.
+- [ ] **Markers:** `g` (or the `d` line), one green square under each flank. `conf` must
+      show the correct side, and the grey floor / black tape must not confirm.
 - [ ] **Ground:** continuity between Mega GND, L298N GND, QTR GND and battery negative.
 - [ ] **Nicla rail:** P0 EMI measurement with the motors running; record it in §7.
 - [ ] **Record the date and result** next to the item. An unrecorded pass is not evidence.
