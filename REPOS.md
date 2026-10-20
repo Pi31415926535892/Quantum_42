@@ -22,7 +22,7 @@ share history. Read this file before you go looking for "the latest code".
 | **GitHub owner** | `Pi31415926535892` |
 | **Default branch** | `main` |
 | **Working branch** | `heist/rcj-rescue-line-2026` |
-| **Holds** | Gangsta heist artifacts (`docs/gangsta/`), hardware ground truth (`HARDWARE.md`), Nicla Vision scripts (`nicla/`), host test harness (`test/`), chassis CAD (`RoboCupBot/`), bench/run logs (`results/`), and the in-repo firmware design (`src/rescue_robot/`). |
+| **Holds** | Gangsta heist artifacts (`docs/gangsta/`), hardware ground truth (`HARDWARE.md`), Nicla Vision scripts (`nicla/`) with their host tests (`test/`), chassis CAD (`RoboCupBot/`), and bench/run logs (`results/`). **No Mega firmware code** — that lives in the firmware repo. |
 
 ## 2. Firmware repo (active development)
 
@@ -45,17 +45,18 @@ The firmware repo is also registered in **this** repo as a **git submodule** at
 
 ---
 
-## 3. There are three firmware locations — know which is which
+## 3. Firmware lives in exactly one repo — the firmware repo
 
-This is the single biggest source of confusion. There are **three** places
-firmware-like code exists, and only one of them is current:
+There used to be three firmware-like locations; the two stale ones in this repo
+(`src/rescue_robot/` and the legacy `Robocup.ino` / `PWM Test` sketches) were
+**removed on 2026-10-20** because they duplicated the active firmware. They
+remain recoverable from git history (snapshot commit `3450fff`). Only two
+locations exist now, and only one is writable:
 
 | Location | What it is | Status |
 |---|---|---|
 | `~/Documents/Arduino/Robocup.ino` (**firmware repo**) | The real, actively-developed firmware | ✅ **CURRENT — develop here** |
 | `firmware/` (**this repo**, submodule) | A pinned read-only reference to the firmware repo at a known commit | 📌 Pin only — edit the Arduino folder, not here |
-| `src/rescue_robot/` (**this repo**) | An earlier spec-driven Mega firmware design with host tests in `test/` | ⚠️ Superseded / historical — confirm before relying on it |
-| `Robocup.ino`, `PWM Test` (**this repo**) | Legacy early sketches | ⚠️ Legacy (left/right swapped, wrong Kp/line-lost) |
 
 ## 4. How to tell which folder is newest
 

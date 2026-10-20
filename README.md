@@ -4,29 +4,37 @@ RoboCup Junior Rescue Line 2026 platform — Arduino Mega 2560 + Nicla Vision, l
 with rescue (goal-stop, evac zone, victim classification), built under the Gangsta Agents
 Spec-Driven Development framework.
 
-**Status (2026-09-22):** Heist `rcj-rescue-line-2026` is in **The Hit** (execution) phase.
-See `docs/gangsta/rcj-rescue-line-2026/checkpoints/` for the resume checkpoint, and
-`docs/gangsta/rcj-rescue-line-2026/plans/2026-09-22-execution-plan.md` for the Work Package
-breakdown and milestones (Don deadline: robot fully up and running by **Oct 15**, tuning
-Oct 15–22, qualifier ≈ Oct 22).
+**Status (2026-10-20):** The active Arduino Mega 2560 firmware lives in the
+separate **firmware repo** (`~/Documents/Arduino/Robocup.ino`) — see `REPOS.md`.
+The in-repo firmware design from heist `rcj-rescue-line-2026` was excised on
+2026-10-20 and remains recoverable from git history (snapshot commit `3450fff`);
+the heist artifacts stay in `docs/gangsta/`.
 
 ## Layout
 
 | Path | What it is |
 |------|-----------|
-| `src/rescue_robot/` | Mega firmware modules (pure-C++14 logic in `.h`/headers + AVR-only glue in `.ino`) |
-| `nicla/` | Nicla Vision MicroPython/OpenMV scripts (`tof.py`, `imu.py`; `config/link/vision/main` in progress) |
-| `test/` | Host-side test harness — `run_tests.sh` compiles+runs `*_test.cpp` (g++ -std=c++14) and `*_test.py` (python3 unittest); `dryrun.ino` is the AVR overlay skeleton |
+| `nicla/` | Nicla Vision MicroPython/OpenMV scripts (`tof.py`, `imu.py`, `config/link/vision/main`) |
+| `test/` | Host-side Python tests for `nicla/` (`*_test.py`, run by `run_tests.sh`) |
 | `docs/mega-nicla-protocol.md` | Byte-level Serial1 (D18/D19 + BSS138) link spec between Mega and Nicla |
 | `docs/gangsta/rcj-rescue-line-2026/` | Heist artifacts: dossier, grilling, contract (signed), execution plan, checkpoints |
 | `HARDWARE.md` | Hardware ground truth — wiring, power, calibration sweep, pre-race checklist |
-| `Robocup.ino`, `PWM Test` | Legacy broken sketches (LEFT/RIGHT swapped, wrong Kp/line-lost); remap pending `WP-022` |
+| `firmware/` | Pinned read-only submodule of the firmware repo (edit the Arduino folder, not this) |
 | `RoboCupBot/` | Chassis CAD (`Base.stl`, `Robocup.f3d`) |
+| `results/` | Bench/run logs |
 
 ## Build & test
 
 ```sh
-./test/run_tests.sh        # host tests: g++ C++14 + python3 unittest; must exit 0
+./test/run_tests.sh        # Nicla host tests (python3 unittest); must exit 0
+```
+
+Mega firmware (separate repo):
+
+```sh
+cd ~/Documents/Arduino/Robocup.ino
+./test/run_tests.sh                               # host tests (g++ C++14)
+arduino-cli compile --fqbn arduino:avr:mega .     # sketch build
 ```
 
 The signed Contract forbids reproducing Gangsta-internal spec identifiers (`FR-xxx`,

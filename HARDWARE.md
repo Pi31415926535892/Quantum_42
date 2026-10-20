@@ -16,7 +16,7 @@ RoboCup Junior line-follower-with-rescue platform.
 
 ## 2. Microcontroller ↔ L298N Wiring (Drivetrain)
 
-Wired by hand (ground truth — matches `Robocup.ino` / `PWM Test` pin constants only partially, see §6):
+Wired by hand (ground truth; current pin constants live in the firmware repo's `Robocup.ino.ino` — the legacy in-repo sketches were removed 2026-10-20):
 
 | MCU pin | L298N terminal | Channel | Physical role | Code constant (current) | PWM? |
 |---------|----------------|---------|---------------|-------------------------|------|
@@ -156,7 +156,14 @@ measurement (motors running → Nicla rail).**
   filtered shared rail failing the Nicla's supply/brownout tolerance, flip to Option B and record
   the measurement + decision here.
 
-## 6. Known Wiring Discrepancy — LEFT/RIGHT constants swapped (HIGH PRIORITY)
+## 6. Known Wiring Discrepancy — legacy sketches (HISTORICAL, 2026-10-20)
+
+> **Status:** the two sketches this section described (`Robocup.ino` and
+> `PWM Test`) were removed on 2026-10-20. The active firmware lives in the
+> firmware repo and names every LEFT/RIGHT constant by the physical side it
+> drives. This section is retained as the record of the original defect and the
+> reasoning that fixed it; the constant table below no longer describes the
+> shipped code.
 
 Physical fact: **the LEFT motor pair is wired to channel B, the RIGHT pair to channel A.**
 
@@ -182,7 +189,7 @@ Two consequences:
    pair spins BACKWARD. Combined with (1), an equal `150,150` command spins the robot in
    place instead of driving forward.
 
-Fix (code, recommended) — swap the constants in both `Robocup.ino` and `PWM Test` so names
+Fix (historical — was applied in the removed sketches) — swap the constants so names
 match the physical wheels and each channel is driven forward:
 
 ```cpp
@@ -208,19 +215,23 @@ again — line on the right (`error > 0`) must make the LEFT wheel faster, which
 
 ## 7. Pre-Race Verification Checklist
 
-Run the `PWM Test` sketch over Serial at 115200 baud.
+Flash the firmware repo's sketch and use its serial bench commands (`1`–`4` single
+wheels, `w` both forward, `l`/`r` pivots, `p` creep pulse, `v` whole smart turn).
 
 - [ ] `150,150` — robot drives **straight forward**. If it turns/spins → §6 not fully applied (channels crossed and/or one side reversed).
 - [ ] `150,-150` — robot pivots **in place**, and confirm which way: left-wheel forward = clockwise.
 - [ ] `-150,150` — pivot opposite direction.
 - [ ] `150,50` — robot arcs; confirm the arc direction matches which wheel has the higher speed.
 - [ ] Record the "wheel A faster ⇒ physical turn direction" result; it determines the
-      correct `Kp` sign in `Robocup.ino`.
+      correct `Kp` sign in the firmware repo's sketch.
 - [ ] During calibration, physically sweep the sensors over **both black and white** for
       the full 10 s window.
 - [ ] Confirm the track is a **black line on white** (`readLineBlack` is correct).
 
-## 8. Tuning Reference (as shipped)
+## 8. Tuning Reference (historical — removed design)
+
+> The values below belonged to the in-repo design removed on 2026-10-20. Tuning
+> now lives in the firmware repo's sketch, which is the single source of truth.
 
 | Constant | Value | Note |
 |----------|-------|------|

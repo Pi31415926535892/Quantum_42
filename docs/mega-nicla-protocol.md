@@ -185,7 +185,7 @@ The "LEN" column is the derived value (`PL + 2`) — use it to assert frames in 
 - `confidence`: percent, `0..100`.
 - `mm`: millimeters, `0..4000`.
 - `zone`: sector index `0..sectors−1` toward the best (most open) re-acquisition direction; `0xFF` = no result.
-- `class`: **1 = enclosed (evacuation chamber / walled region), 0 = open (sparse line region), 2 = ambiguous (re-sweep needed)**. (cORRECTION 2026-09-22: both codec implementations — `src/rescue_robot/link.h` and `nicla/link.py` — emit `1`=enclosed / `0`=open on the wire; the pre-signing draft had this inverted. Both ends and `tof.py`'s conservative-`open` ambiguity handling agree with the corrected mapping. The `zone` worked example above reads a close-run; the RULE is "most open contiguous sector" — the example is illustrative only.)
+- `class`: **1 = enclosed (evacuation chamber / walled region), 0 = open (sparse line region), 2 = ambiguous (re-sweep needed)**. (cORRECTION 2026-09-22: both codec implementations — the Mega-side codec (formerly `src/rescue_robot/link.h`, removed 2026-10-20) and `nicla/link.py` — emit `1`=enclosed / `0`=open on the wire; the pre-signing draft had this inverted. Both ends and `tof.py`'s conservative-`open` ambiguity handling agree with the corrected mapping. The `zone` worked example above reads a close-run; the RULE is "most open contiguous sector" — the example is illustrative only.)
 - `yaw`/`pitch`: `0.01 °/LSB`; yaw in `[-18000, +18000]` (±180.00°), pitch likewise.
 - `flags` (IMU): bit0 valid; others reserved zero.
 
