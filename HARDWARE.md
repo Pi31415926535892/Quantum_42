@@ -109,7 +109,7 @@ Both sensors answer at address `0x39`; they use **separate buses instead of a mu
 |----------|---------|----------|
 | USB serial (bench console + log dump) | USB, **115200 baud** | **CODE**: `Serial.begin(115200)` |
 | StartRun button — start / pause / resume and calibration start | D41 | **CODE**: `START_BUTTON_PIN = 41`; wiring convention **UNVERIFIED** |
-| Calibration mode button — skip line ↔ green dot | D42 | **CODE**: `CAL_SKIP_BUTTON_PIN = 42`; wiring convention **UNVERIFIED** |
+| Calibration mode button — skip line ↔ green dot | D39 | **CODE**: `CAL_SKIP_BUTTON_PIN = 39`; wiring convention **UNVERIFIED** |
 | Calibration button — enter/exit menu, repeat last sweep | D43 | **CODE**: `CAL_BUTTON_PIN = 43`; wiring convention **UNVERIFIED** |
 | Nicla link, planned | D18 (TX1) / D19 (RX1) + BSS138 shifter | **UNVERIFIED / not implemented** — see §7 |
 
@@ -118,15 +118,15 @@ pull-up (`INPUT_PULLUP`, pressed = **LOW**). Debounce is 25 ms. D41 starts only
 on a 500 ms hold; a tap pauses or resumes instantly. D43 opens and closes the
 calibration menu on a 3000 ms hold, and only from Idle, AwaitingCalibration or
 Paused — it is inert during a run. Inside the menu D41 **presses** to start the
-selected sweep, D42 skips between line (blue) and green-dot (green), a short D43
+selected sweep, D39 skips between line (blue) and green-dot (green), a short D43
 tap repeats the last sweep, and a 3000 ms D43 hold exits. Verify the convention
 at the bench: the boot banner prints
-`BTN D41=<0|1> D42=<0|1> D43=<0|1> pressed=LOW (INPUT_PULLUP)`, and a press must
+`BTN D41=<0|1> D39=<0|1> D43=<0|1> pressed=LOW (INPUT_PULLUP)`, and a press must
 read `0`.
 If the leads run beside motor wiring, fit 4.7–10 kΩ to +5 V and 100 nF to GND at
 each pin — the internal pull-up is weak and this is **UNVERIFIED** until measured.
 
-Do not reuse D2–D5, D18–D21, D30–D31, D35, D41, D42, D43 or A0/A2/A4/A6/A8/A10/A12/A14
+Do not reuse D2–D5, D18–D21, D30–D31, D35, D41, D39, D43 or A0/A2/A4/A6/A8/A10/A12/A14
 without updating this table and the sketch together.
 
 ### 2.6 EEPROM Map
@@ -289,10 +289,10 @@ Run these on the bench before any run. Each item names the evidence it produces.
 - [ ] **Line calibration:** hold D43 3 s to open the menu (blue), then press D41. Sweep the
       bar over white **and** black for the full 10 s. Check the printed `MIN/MAX` per sensor:
       all eight ranges must be usable, not `min ≈ max`. Hold D43 3 s again to leave.
-- [ ] **Green-dot calibration:** from the menu, press D42 (display turns green), then D41.
+- [ ] **Green-dot calibration:** from the menu, press D39 (display turns green), then D41.
       Sweep both flanks over the green squares plus white and black for 10 s. The printed
       `CAL L/R … OK` lines and the green result cue confirm it.
-- [ ] **Button control:** a short D43 tap in the menu repeats the last sweep; D42 changes the
+- [ ] **Button control:** a short D43 tap in the menu repeats the last sweep; D39 changes the
       mode without leaving; D41 press starts; D43 hold leaves to Idle (or AwaitingCalibration
       if no usable blob exists).
 - [ ] **Markers:** `g`, or the `LA`/`RA` fields on every fifth QTR line, one green square
@@ -321,7 +321,7 @@ Run these on the bench before any run. Each item names the evidence it produces.
 
 | Date | Change | Evidence |
 |------|--------|----------|
-| 2026-10-21 | Calibration is now a button menu (D43 3 s): line (blue) / green-dot (green), D42 skips, D41 starts, short D43 repeats, long D43 exits. D42 added | **CODE** + host tests |
+| 2026-10-21 | Calibration is now a button menu (D43 3 s): line (blue) / green-dot (green), D39 skips, D41 starts, short D43 repeats, long D43 exits. D39 added | **CODE** + host tests |
 | 2026-10-20 | Line bar **flipped (net flip = 1)**: table `A14 … A0`. The straight-through table caused inverted steering, fighting wheels and motor whine | **BENCH** |
 | 2026-10-20 | Legacy sketches and the in-repo design removed; this document rebuilt with evidence tags | code + git history |
 | 2026-10-17 | Motor inputs remapped to D2–D5; ENA/ENB no longer driven by the sketch | **CODE** |
