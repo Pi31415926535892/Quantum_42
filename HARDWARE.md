@@ -108,20 +108,25 @@ Both sensors answer at address `0x39`; they use **separate buses instead of a mu
 | Function | MCU pin | Evidence |
 |----------|---------|----------|
 | USB serial (bench console + log dump) | USB, **115200 baud** | **CODE**: `Serial.begin(115200)` |
-| StartRun button — start / pause / resume | D41 | **CODE**: `START_BUTTON_PIN = 41`; wiring convention **UNVERIFIED** |
-| Calibration button — 3 s hold | D43 | **CODE**: `CAL_BUTTON_PIN = 43`; wiring convention **UNVERIFIED** |
+| StartRun button — start / pause / resume and calibration start | D41 | **CODE**: `START_BUTTON_PIN = 41`; wiring convention **UNVERIFIED** |
+| Calibration mode button — skip line ↔ green dot | D42 | **CODE**: `CAL_SKIP_BUTTON_PIN = 42`; wiring convention **UNVERIFIED** |
+| Calibration button — enter/exit menu, repeat last sweep | D43 | **CODE**: `CAL_BUTTON_PIN = 43`; wiring convention **UNVERIFIED** |
 | Nicla link, planned | D18 (TX1) / D19 (RX1) + BSS138 shifter | **UNVERIFIED / not implemented** — see §7 |
 
-Both buttons are momentary, wired leg-to-**GND**, read with the internal pull-up
-(`INPUT_PULLUP`, pressed = **LOW**). Debounce is 25 ms. D41 starts only on a
-500 ms hold; a tap pauses or resumes instantly. D43 calibrates on a 3000 ms hold
-and only from Idle, AwaitingCalibration or Paused — it is inert during a run.
-Verify the convention at the bench: the boot banner prints
-`BTN D41=<0|1> D43=<0|1> pressed=LOW (INPUT_PULLUP)`, and a press must read `0`.
+All three buttons are momentary, wired leg-to-**GND**, read with the internal
+pull-up (`INPUT_PULLUP`, pressed = **LOW**). Debounce is 25 ms. D41 starts only
+on a 500 ms hold; a tap pauses or resumes instantly. D43 opens and closes the
+calibration menu on a 3000 ms hold, and only from Idle, AwaitingCalibration or
+Paused — it is inert during a run. Inside the menu D41 **presses** to start the
+selected sweep, D42 skips between line (blue) and green-dot (green), a short D43
+tap repeats the last sweep, and a 3000 ms D43 hold exits. Verify the convention
+at the bench: the boot banner prints
+`BTN D41=<0|1> D42=<0|1> D43=<0|1> pressed=LOW (INPUT_PULLUP)`, and a press must
+read `0`.
 If the leads run beside motor wiring, fit 4.7–10 kΩ to +5 V and 100 nF to GND at
 each pin — the internal pull-up is weak and this is **UNVERIFIED** until measured.
 
-Do not reuse D2–D5, D18–D21, D30–D31, D35, D41, D43 or A0/A2/A4/A6/A8/A10/A12/A14
+Do not reuse D2–D5, D18–D21, D30–D31, D35, D41, D42, D43 or A0/A2/A4/A6/A8/A10/A12/A14
 without updating this table and the sketch together.
 
 ### 2.6 EEPROM Map
@@ -147,7 +152,10 @@ refuses to start, never as garbage thresholds.
 | Idle | pixel 0 green heartbeat | 100 ms every 2 s |
 | No calibration | all **amber** | missing 300/300, corrupt 120/130 |
 | Start refused (no calibration) | all **red** | 300 ms |
-| Calibrating | one green dot walking | continuous |
+| Calibration menu — line mode | all **blue** | static |
+| Calibration menu — green-dot mode | all **green** | static |
+| Calibrating line | one **blue** dot walking | continuous |
+| Calibrating green dot | one **green** dot walking | continuous |
 | Calibration saved | all green | 3 × 120 ms |
 | Calibration usable, not saved | all **amber** | 3 × 120 ms |
 | Calibration failed | all **red** | 3 × 950 ms |
@@ -204,8 +212,11 @@ Pixels 8–11 are the colour sensors' illuminators: they stay lit in **every** f
 - **Ride height ~11.2 mm** — near the top of the QTR-8A's contrast range. Black/white
   readings are closer together than ideal, so the calibration sweep is mandatory and
   the base speed may need to stay low.
-- Calibration: 10 s boot sweep over **white + black + green**; `k` re-runs it. Sweeping
-  only one surface produces a degenerate `min ≈ max` calibration.
+- Calibration is split into two selectable sweeps: the **line** sweep (10 s over white +
+  black, blue LED) and the **green-dot** sweep (10 s over green + white + black, green LED).
+  The line sweep must run first because the persisted blob needs its references; the green
+  sweep refreshes only the colour thresholds. `k` re-runs the line sweep. Sweeping only one
+  surface produces a degenerate `min ≈ max` calibration.
 - The sketch reads the bar with plain `analogRead`; there is **no QTRSensors library** in
   this firmware.
 
@@ -224,8 +235,9 @@ Pixels 8–11 are the colour sensors' illuminators: they stay lit in **every** f
   way; green on both sides means dead end / U-turn; none means straight.
 - The illuminators (pixels 8–11) light the colour sensors, so they are part of the
   optical path — do not switch them off to "help" detection.
-- Thresholds are **derived at boot** from the same sweep as the line calibration; a failed
-  colour calibration falls back to the hand-tuned constants and lights the red failure cue.
+- Thresholds are **derived on demand** by the green-dot mode of the calibration menu; a failed
+  green-dot sweep keeps the previous thresholds (or falls back to the hand-tuned constants)
+  and lights the red failure cue.
 - Bench readout: `g` prints `GRN L=… R=… conf LR`; `c` clears the held peak samples.
 - Mounting height/geometry is **not recorded** — do not quote a number until it is measured.
 
@@ -274,9 +286,15 @@ Run these on the bench before any run. Each item names the evidence it produces.
       stream. With the line under the physical leftmost sensor, logical index 0 must read
       dark; with the line under the rightmost, index 7 must read dark. Steering must move
       toward the line, not away.
-- [ ] **Line calibration:** `k`, sweeping the bar over white **and** black for the full
-      10 s. Check the printed `MIN/MAX` per sensor: all eight ranges must be usable, not
-      `min ≈ max`.
+- [ ] **Line calibration:** hold D43 3 s to open the menu (blue), then press D41. Sweep the
+      bar over white **and** black for the full 10 s. Check the printed `MIN/MAX` per sensor:
+      all eight ranges must be usable, not `min ≈ max`. Hold D43 3 s again to leave.
+- [ ] **Green-dot calibration:** from the menu, press D42 (display turns green), then D41.
+      Sweep both flanks over the green squares plus white and black for 10 s. The printed
+      `CAL L/R … OK` lines and the green result cue confirm it.
+- [ ] **Button control:** a short D43 tap in the menu repeats the last sweep; D42 changes the
+      mode without leaving; D41 press starts; D43 hold leaves to Idle (or AwaitingCalibration
+      if no usable blob exists).
 - [ ] **Markers:** `g`, or the `LA`/`RA` fields on every fifth QTR line, one green square
       under each flank. `conf` must show the correct side, and the grey floor / black tape
       must not confirm.
@@ -303,6 +321,7 @@ Run these on the bench before any run. Each item names the evidence it produces.
 
 | Date | Change | Evidence |
 |------|--------|----------|
+| 2026-10-21 | Calibration is now a button menu (D43 3 s): line (blue) / green-dot (green), D42 skips, D41 starts, short D43 repeats, long D43 exits. D42 added | **CODE** + host tests |
 | 2026-10-20 | Line bar **flipped (net flip = 1)**: table `A14 … A0`. The straight-through table caused inverted steering, fighting wheels and motor whine | **BENCH** |
 | 2026-10-20 | Legacy sketches and the in-repo design removed; this document rebuilt with evidence tags | code + git history |
 | 2026-10-17 | Motor inputs remapped to D2–D5; ENA/ENB no longer driven by the sketch | **CODE** |

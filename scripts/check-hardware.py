@@ -98,7 +98,9 @@ def main() -> int:
     check("HARDWARE.md says the Nicla link is not implemented", "not implemented" in hw)
 
     # --- Operator buttons ----------------------------------------------
-    for name, pin in (("START_BUTTON_PIN", "41"), ("CAL_BUTTON_PIN", "43")):
+    for name, pin in (("START_BUTTON_PIN", "41"),
+                      ("CAL_SKIP_BUTTON_PIN", "42"),
+                      ("CAL_BUTTON_PIN", "43")):
         got = constant(sketch, name)
         check(f"firmware {name} == D{pin}", got == pin, got or "missing")
         check(f"HARDWARE.md documents D{pin} for {name}", f"| D{pin} |" in hw)
@@ -107,11 +109,13 @@ def main() -> int:
 
     reads = sorted(set(re.findall(r"digitalRead\s*\(\s*([A-Za-z0-9_]+)\s*\)",
                                   sketch)))
-    check("digital reads are only the two buttons",
-          reads == ["CAL_BUTTON_PIN", "START_BUTTON_PIN"], ",".join(reads))
+    check("digital reads are only the three buttons",
+          reads == ["CAL_BUTTON_PIN", "CAL_SKIP_BUTTON_PIN", "START_BUTTON_PIN"],
+          ",".join(reads))
     check("buttons are active LOW",
           re.search(r"BUTTON_PRESSED_LEVEL\s*=\s*LOW", sketch) is not None)
     check("boot banner reports button state", "BTN D41=" in sketch)
+    check("boot banner reports D42", "BTN D41=" in sketch and " D42=" in sketch)
 
     # --- The journal is disabled ----------------------------------------
     check("no warm-boot log hold remains", "logHold" not in sketch)
