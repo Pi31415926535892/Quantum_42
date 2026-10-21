@@ -4,10 +4,12 @@ Status: ratification draft — single source of truth for the UART link between 
 Arduino Mega 2560 Pro (host / real-time base) and the Arduino Nicla Vision (perception
 daughter) of the Quantum 42 rescue robot.
 
-> **Implementation status (2026-10-20):** the Nicla side exists in `nicla/link.py`.
-> The active Mega sketch does **not** implement this link yet (no `Serial1` code), so
-> D18/D19 are reserved, not proven. Treat this document as the design contract, not as
-> evidence that the two boards are talking.
+> **Implementation status (2026-10-22):** the physical link is **Serial3** on the Mega —
+> **RX3 = D15** ← Nicla TX, **TX3 = D14** → Nicla RX, through the BSS138 shifter. The main
+> sketch now services RX3 every loop tick through `NiclaToF.h`, but it reads the Nicla's
+> **ASCII** ToF fields (`{dist}` padded to four characters), not this binary protocol. The
+> wire format below remains a design contract; D14/D15 are in use, and the binary message
+> set is not implemented on either side of the main sketch yet.
 
 Every numeric value, field, scale, and constant in this document is **normative**. Two
 independent implementations (Arduino C++ side and MicroPython side) are expected to
@@ -40,9 +42,12 @@ carries both directions. Two channels are used; the other two are spare.
 
 | Signal | 5 V side (Mega) | 3.3 V side (Nicla) | Shifter channel |
 |--------|-----------------|--------------------|-----------------|
-| Mega → Nicla | Serial1 **TX = D18** | Nicla RX | ch1 |
-| Nicla → Mega | Serial1 **RX = D19** | Nicla TX | ch2 |
+| Mega → Nicla | Serial3 **TX3 = D14** | Nicla RX | ch1 |
+| Nicla → Mega | Serial3 **RX3 = D15** | Nicla TX | ch2 |
 | — | — | — | ch3, ch4 spare |
+
+The ASCII ToF path uses the Nicla → Mega direction only (RX3 = D15); the Mega → Nicla
+direction (TX3 = D14) is wired per this table for the binary protocol.
 
 Per-channel BSS138 wiring (identical for both active channels):
 
@@ -266,7 +271,7 @@ Receiver state is `HUNT` (scanning for the preamble) or `FRAME` (consuming a fra
 
 ### 5.5 Non-blocking send/receive (Mega is host; applies to the link path)
 
-- **RX:** drain Serial1 each main-loop tick with a byte budget `≤ 64 bytes/tick`, and decode
+- **RX:** drain Serial3 each main-loop tick with a byte budget `≤ 64 bytes/tick`, and decode
   **at most one frame per tick**. Never wait for a byte to arrive.
 - **TX:** build frames into a TX FIFO. Each tick, transmit while the TX register is empty
   and the FIFO is non-empty. If the FIFO is full, drop the **oldest** frame and increment
@@ -328,3 +333,4 @@ tick — the loop never spins. A wedged clock/FSM is bounded by the watchdog (§
 | Version | Date | Change |
 |---------|------|--------|
 | 1.0 | 2026-09-22 | Initial ratification: frame format, CRC-8 (poly 0x07, init 0x00, no final XOR), message set both directions, heartbeat/staleness/re-sync contract, LoP handshake + QSPI cal-cache semantics, CONFIG_PUSH key registry, versioning guarantees. |
+| 1.0 (physical rev A) | 2026-10-22 | Physical link moved from Serial1 (D18/D19) to **Serial3 (TX3 = D14, RX3 = D15)**. Wire format, message ids, CRC and protocol version 1.0 are unchanged. |

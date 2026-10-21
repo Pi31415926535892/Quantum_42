@@ -111,7 +111,7 @@ Both sensors answer at address `0x39`; they use **separate buses instead of a mu
 | StartRun button — start / pause / resume and calibration start | D41 | **CODE**: `START_BUTTON_PIN = 41`; wiring convention **UNVERIFIED** |
 | Calibration mode button — skip line ↔ green dot | D39 | **CODE**: `CAL_SKIP_BUTTON_PIN = 39`; wiring convention **UNVERIFIED** |
 | Calibration button — enter/exit menu, repeat last sweep | D43 | **CODE**: `CAL_BUTTON_PIN = 43`; wiring convention **UNVERIFIED** |
-| Nicla link, planned | D18 (TX1) / D19 (RX1) + BSS138 shifter | **UNVERIFIED / not implemented** — see §7 |
+| Nicla link | **RX3 = D15** (Mega receive) / **TX3 = D14** (Mega transmit) + BSS138 shifter | **ASCII ToF readout is live in the main sketch**; binary protocol not implemented — see §7 |
 
 All three buttons are momentary, wired leg-to-**GND**, read with the internal
 pull-up (`INPUT_PULLUP`, pressed = **LOW**). Debounce is 25 ms. D41 starts only
@@ -126,8 +126,9 @@ read `0`.
 If the leads run beside motor wiring, fit 4.7–10 kΩ to +5 V and 100 nF to GND at
 each pin — the internal pull-up is weak and this is **UNVERIFIED** until measured.
 
-Do not reuse D2–D5, D18–D21, D30–D31, D35, D41, D39, D43 or A0/A2/A4/A6/A8/A10/A12/A14
-without updating this table and the sketch together.
+Do not reuse D2–D5, D14–D15, D20–D21, D30–D31, D35, D41, D39, D43 or
+A0/A2/A4/A6/A8/A10/A12/A14 without updating this table and the sketch together.
+D18/D19 (Serial1) were freed on 2026-10-22 when the Nicla link moved to Serial3.
 
 ### 2.6 EEPROM Map
 
@@ -263,10 +264,13 @@ measurement (motors running → Nicla rail).**
   directly; the Nicla then survives a main-rail cut with stale state.
 - 2.4 GHz radios are compile-time disabled for the match window.
 - ⚠️ **UNVERIFIED** until the P0 metered run. Record the measurement and the decision here.
-- The **link is not implemented**: the current sketch has no `Serial1` code. The planned
-  wiring is Mega TX1 = D18 → Nicla RX, Mega RX1 = D19 ← Nicla TX, through a BSS138
-  level shifter (see `docs/mega-nicla-protocol.md`). Do not assume the Nicla is talking
-  to the Mega until that code exists and the link is bench-soaked.
+- **Link status:** the main sketch services **Serial3** on every loop tick. It reads the
+  Nicla's **ASCII** ToF fields (`{dist}` padded to four characters, comma separated,
+  115200 8N1) through `NiclaToF.h` and prints `TOF <mm>` at 5 Hz. Physical wiring: Mega
+  **RX3 = D15** ← Nicla TX, Mega **TX3 = D14** → Nicla RX, through a BSS138 level shifter
+  (see `docs/mega-nicla-protocol.md`). The ratified **binary protocol is not implemented
+  in the main sketch** yet; the ASCII path is the seam where it will land. The Mega → Nicla
+  direction is wired but unused until then.
 
 ## 8. Pre-Race Verification Checklist
 
@@ -311,7 +315,7 @@ Run these on the bench before any run. Each item names the evidence it produces.
 | 3 | Battery chemistry, capacity, loaded voltage | Read the pack label; meter it under motor load; record here |
 | 4 | Mega supply path on the field | Trace the 5 V wire from L298N to the Mega; record the connector |
 | 5 | Nicla rail EMI / brownout under motor switching | P0 metered run; Option B only on failure |
-| 6 | Nicla link | Not implemented in the sketch; implement `Serial1` + shifter, then soak |
+| 6 | Nicla link | ASCII ToF readout is live on Serial3 RX3 = D15; binary protocol not implemented. Implement the protocol, then soak |
 | 7 | APDS-9960 pull-ups / level shifting | Inspect the breakouts; scope SDA/SCL if reads are flaky |
 | 8 | Marker sensor mounting height | Measure; record before quoting detection geometry |
 | 9 | LED strip 5 V source and current budget | Meter the strip; do not assume the Mega rail can carry it |

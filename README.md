@@ -16,7 +16,7 @@ the heist artifacts stay in `docs/gangsta/`.
 |------|-----------|
 | `nicla/` | Nicla Vision MicroPython/OpenMV scripts (`tof.py`, `imu.py`, `config/link/vision/main`) |
 | `test/` | Host-side Python tests for `nicla/` (`*_test.py`, run by `run_tests.sh`) |
-| `docs/mega-nicla-protocol.md` | Byte-level Serial1 (D18/D19 + BSS138) link spec between Mega and Nicla |
+| `docs/mega-nicla-protocol.md` | Byte-level Serial3 (D14/D15 + BSS138) link spec between Mega and Nicla |
 | `docs/gangsta/rcj-rescue-line-2026/` | Heist artifacts: dossier, grilling, contract (signed), execution plan, checkpoints |
 | `HARDWARE.md` | Hardware ground truth — wiring, power, calibration sweep, pre-race checklist |
 | `firmware/` | Pinned read-only submodule of the firmware repo (edit the Arduino folder, not this) |

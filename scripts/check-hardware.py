@@ -5,7 +5,8 @@ HARDWARE.md is only useful if it cannot silently disagree with the sketch.
 This script reads the firmware constants (the source of truth for pins) and
 checks the claims HARDWARE.md makes about them. It also refuses the stale
 designs that were excised on 2026-10-20 (I2C mux, QTRSensors library,
-Serial1 link, legacy sketches).
+legacy sketches), and keeps the documented Nicla UART wiring aligned with the
+firmware repo.
 
 Usage:
     scripts/check-hardware.py
@@ -94,8 +95,21 @@ def main() -> int:
 
     # --- Console / Nicla ------------------------------------------------
     check("sketch console is 115200", "Serial.begin(115200)" in sketch)
-    check("sketch has no Serial1 link yet", "Serial1" not in sketch)
-    check("HARDWARE.md says the Nicla link is not implemented", "not implemented" in hw)
+    check("main sketch services the Nicla UART (Serial3)", "Serial3" in sketch)
+    check("main sketch includes the Nicla ToF module", '#include "NiclaToF.h"' in sketch)
+    check("HARDWARE.md says the binary protocol is not implemented in the main sketch",
+          "binary protocol is not implemented" in hw)
+    check("HARDWARE.md documents the Nicla receive pin as RX3 = D15",
+          "RX3 = D15" in hw)
+    check("HARDWARE.md documents the Nicla transmit pin as TX3 = D14",
+          "TX3 = D14" in hw)
+
+    nicla = FW / "NiclaToF.h"
+    check("NiclaToF.h exists", nicla.exists())
+    poc = FW / "pocs/ToFSerialTest/ToFSerialTest.ino"
+    poc_text = read(poc) if poc.exists() else ""
+    check("ToF bring-up PoC still builds against the shared module",
+          '#include "NiclaToF.h"' in poc_text)
 
     # --- Operator buttons ----------------------------------------------
     for name, pin in (("START_BUTTON_PIN", "41"),
