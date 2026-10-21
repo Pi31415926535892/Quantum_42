@@ -97,6 +97,45 @@ def main() -> int:
     check("sketch has no Serial1 link yet", "Serial1" not in sketch)
     check("HARDWARE.md says the Nicla link is not implemented", "not implemented" in hw)
 
+    # --- Operator buttons ----------------------------------------------
+    for name, pin in (("START_BUTTON_PIN", "41"), ("CAL_BUTTON_PIN", "43")):
+        got = constant(sketch, name)
+        check(f"firmware {name} == D{pin}", got == pin, got or "missing")
+        check(f"HARDWARE.md documents D{pin} for {name}", f"| D{pin} |" in hw)
+        check(f"{name} is INPUT_PULLUP",
+              f"pinMode({name}, INPUT_PULLUP)" in sketch)
+
+    reads = sorted(set(re.findall(r"digitalRead\s*\(\s*([A-Za-z0-9_]+)\s*\)",
+                                  sketch)))
+    check("digital reads are only the two buttons",
+          reads == ["CAL_BUTTON_PIN", "START_BUTTON_PIN"], ",".join(reads))
+    check("buttons are active LOW",
+          re.search(r"BUTTON_PRESSED_LEVEL\s*=\s*LOW", sketch) is not None)
+    check("boot banner reports button state", "BTN D41=" in sketch)
+
+    # --- The journal is disabled ----------------------------------------
+    check("no warm-boot log hold remains", "logHold" not in sketch)
+    check("the old blocking sweep entry point is gone",
+          "calibrateSensors" not in sketch)
+    check("the journal is never offered from a tick",
+          re.search(r"\bjournalOffer\(\s*rec\s*\)", sketch) is None)
+    check("the journal is never pumped from the loop",
+          "journalPump();" not in sketch)
+    check("a button-state readout is printed at boot", "pressed=LOW" in sketch)
+
+    # --- EEPROM calibration region --------------------------------------
+    store = read(FW / "CalibrationStore.h")
+    slot = int(re.search(r"CAL_SLOT_BYTES\s*=\s*(\d+)", store).group(1))
+    baddr = int(re.search(r"CAL_SLOT_B_ADDR\s*=\s*(\d+)", store).group(1))
+    region = int(re.search(r"CAL_REGION_BYTES\s*=\s*(\d+)", store).group(1))
+    check("calibration slots are contiguous", baddr == slot)
+    check("calibration region fits 4096 B",
+          baddr + slot == region and region <= 4096)
+    m = re.search(r"<!--\s*eeprom-cal\s+(\d+)\s+(\d+)\s*-->", hw)
+    check("HARDWARE.md documents the calibration region",
+          bool(m and int(m.group(1)) == baddr - slot
+               and int(m.group(2)) == region - 1))
+
     # --- No resurrected removed designs ---------------------------------
     check("sketch does not use the QTRSensors library", "QTRSensors" not in sketch)
     check("HARDWARE.md has no removed src/ path", "src/rescue_robot" not in hw)

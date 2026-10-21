@@ -36,7 +36,7 @@ RoboCup Junior Rescue Line 2026 platform. **One robot, one configuration.**
 | Power | Battery → L298N 12 V; L298N 5 V logic rail | 1 | Battery chemistry and capacity are **not recorded** — see §9 |
 
 **Not used by the current sketch** (do not infer pins for them from old commits):
-TCA9548A I²C mux, bumpers, reflectivity/conductivity probes, servos, start button.
+TCA9548A I²C mux, bumpers, reflectivity/conductivity probes, servos.
 If any of these return, give it a pin row here and code that reads it.
 
 ## 2. Complete Pin Map
@@ -108,12 +108,55 @@ Both sensors answer at address `0x39`; they use **separate buses instead of a mu
 | Function | MCU pin | Evidence |
 |----------|---------|----------|
 | USB serial (bench console + log dump) | USB, **115200 baud** | **CODE**: `Serial.begin(115200)` |
+| StartRun button — start / pause / resume | D41 | **CODE**: `START_BUTTON_PIN = 41`; wiring convention **UNVERIFIED** |
+| Calibration button — 3 s hold | D43 | **CODE**: `CAL_BUTTON_PIN = 43`; wiring convention **UNVERIFIED** |
 | Nicla link, planned | D18 (TX1) / D19 (RX1) + BSS138 shifter | **UNVERIFIED / not implemented** — see §7 |
 
-Do not reuse D2–D5, D18–D21, D30–D31, D35 or A0/A2/A4/A6/A8/A10/A12/A14 without
-updating this table and the sketch together.
+Both buttons are momentary, wired leg-to-**GND**, read with the internal pull-up
+(`INPUT_PULLUP`, pressed = **LOW**). Debounce is 25 ms. D41 starts only on a
+500 ms hold; a tap pauses or resumes instantly. D43 calibrates on a 3000 ms hold
+and only from Idle, AwaitingCalibration or Paused — it is inert during a run.
+Verify the convention at the bench: the boot banner prints
+`BTN D41=<0|1> D43=<0|1> pressed=LOW (INPUT_PULLUP)`, and a press must read `0`.
+If the leads run beside motor wiring, fit 4.7–10 kΩ to +5 V and 100 nF to GND at
+each pin — the internal pull-up is weak and this is **UNVERIFIED** until measured.
+
+Do not reuse D2–D5, D18–D21, D30–D31, D35, D41, D43 or A0/A2/A4/A6/A8/A10/A12/A14
+without updating this table and the sketch together.
+
+### 2.6 EEPROM Map
+
+<!-- eeprom-cal 0 127 -->
+
+| Region | Addresses | Holds |
+|---|---|---|
+| Calibration slot A | **0–63** | magic `"Q42C"`, version, flank flags, sequence, line min/max, green thresholds, CRC |
+| Calibration slot B | **64–127** | the other slot; writes alternate so a torn write leaves one loadable |
+| Journal | **disabled** | not written; before re-enabling, move it to 128 and read the note in `Journal.h` |
+
+The calibration region owns 0–127. The journal is disabled for now — its code is
+kept, but nothing offers, pumps or dumps it. A re-enable that forgets to move the
+journal would overwrite the calibration magic, which reads as **corrupt** and
+refuses to start, never as garbage thresholds.
+
+### 2.7 LED Diagnostics
+
+| State | Display (0–7) | Pattern |
+|---|---|---|
+| Boot, calibrated | all green, or all **red** if a colour flank used defaults | 3 × 120 ms |
+| Idle | pixel 0 green heartbeat | 100 ms every 2 s |
+| No calibration | all **amber** | missing 300/300, corrupt 120/130 |
+| Start refused (no calibration) | all **red** | 300 ms |
+| Calibrating | one green dot walking | continuous |
+| Calibration saved | all green | 3 × 120 ms |
+| Calibration usable, not saved | all **amber** | 3 × 120 ms |
+| Calibration failed | all **red** | 3 × 950 ms |
+| Paused | pixels 3 and 4 white | static |
+
+Pixels 8–11 are the colour sensors' illuminators: they stay lit in **every** frame.
 
 ## 3. Drivetrain Wiring
+
 
 ```
    ARDUINO MEGA                         L298N                        MOTORS
