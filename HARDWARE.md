@@ -32,7 +32,7 @@ RoboCup Junior Rescue Line 2026 platform. **One robot, one configuration.**
 | Line sensor | Pololu QTR-8A analog reflectance bar | 1 | 8 channels; emitters always on; ~11.2 mm ride height — **BENCH** |
 | Marker sensors | APDS-9960 RGB / proximity | 2 | Both at I²C `0x39`; LEFT on hardware I²C, RIGHT on software I²C — **CODE** |
 | LED strip | WS2812B, 12 pixels | 1 | Data D35; pixels 0–7 display, 8–11 illumination — **CODE** |
-| Coprocessor | Arduino Nicla Vision | 1 | Camera / ToF / IMU. **Not linked by the current sketch** — see §7 |
+| Coprocessor | Arduino Nicla Vision | 1 | Camera / ToF / IMU. **ASCII ToF link live on Serial3** — see §7 |
 | Power | Battery → L298N 12 V; L298N 5 V logic rail | 1 | Battery chemistry and capacity are **not recorded** — see §9 |
 
 **Not used by the current sketch** (do not infer pins for them from old commits):
@@ -270,7 +270,9 @@ measurement (motors running → Nicla rail).**
   **RX3 = D15** ← Nicla TX, Mega **TX3 = D14** → Nicla RX, through a BSS138 level shifter
   (see `docs/mega-nicla-protocol.md`). The ratified **binary protocol is not implemented
   in the main sketch** yet; the ASCII path is the seam where it will land. The Mega → Nicla
-  direction is wired but unused until then.
+  direction is wired but unused until then. A fresh reading below **25 mm** triggers the
+  fixed obstacle detour in `AvoidManeuver.h` (latched until 150 mm, lone spikes rejected);
+  each trigger prints `AVOID <mm> mm (prev <mm>)`.
 
 ## 8. Pre-Race Verification Checklist
 

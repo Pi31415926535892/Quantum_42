@@ -39,11 +39,10 @@ The firmware repo is also registered in **this** repo as a **git submodule** at
 
 > **Note on accounts.** The two repos are owned by two different GitHub
 > accounts: `Pi31415926535892` (project) and `BismarckYamato` (firmware).
-> `BismarckYamato` is the account authenticated on this machine and has push
-> access to the **firmware repo only** (confirmed 2026-10-20). **This project
-> repo is read-only from here**: commits on `heist/rcj-rescue-line-2026` stay
-> local until push rights are granted. Do not attempt to "fix" this by renaming
-> repos or switching remotes.
+> `BismarckYamato` is the account authenticated on this machine. On 2026-10-22
+> the project repo pushed successfully over SSH (the HTTPS remote is rewritten),
+> so **both repos are writable from here**. Do not rename repos or switch
+> remotes to "fix" access.
 
 ---
 
@@ -105,8 +104,7 @@ expected: `firmware/` is a reference, not where you edit.
    **only** remote this machine can push to.
 3. Back in this repo, update the pin: `scripts/sync-firmware.sh`.
 4. Commit any project-side docs/results here on the `heist/rcj-rescue-line-2026`
-   branch. **Do not push yet** — the project repo is read-only from this machine
-   until access is granted; the commits stay local.
+   branch and push (the remote is SSH-rewritten and writable as of 2026-10-22).
 
 ---
 
