@@ -113,7 +113,6 @@ def main() -> int:
 
     # --- Operator buttons ----------------------------------------------
     for name, pin in (("START_BUTTON_PIN", "41"),
-                      ("CAL_SKIP_BUTTON_PIN", "39"),
                       ("CAL_BUTTON_PIN", "43")):
         got = constant(sketch, name)
         check(f"firmware {name} == D{pin}", got == pin, got or "missing")
@@ -123,13 +122,12 @@ def main() -> int:
 
     reads = sorted(set(re.findall(r"digitalRead\s*\(\s*([A-Za-z0-9_]+)\s*\)",
                                   sketch)))
-    check("digital reads are only the three buttons",
-          reads == ["CAL_BUTTON_PIN", "CAL_SKIP_BUTTON_PIN", "START_BUTTON_PIN"],
+    check("digital reads are only the two buttons",
+          reads == ["CAL_BUTTON_PIN", "START_BUTTON_PIN"],
           ",".join(reads))
     check("buttons are active LOW",
           re.search(r"BUTTON_PRESSED_LEVEL\s*=\s*LOW", sketch) is not None)
     check("boot banner reports button state", "BTN D41=" in sketch)
-    check("boot banner reports D39", "BTN D41=" in sketch and " D39=" in sketch)
 
     # --- The journal is disabled ----------------------------------------
     check("no warm-boot log hold remains", "logHold" not in sketch)

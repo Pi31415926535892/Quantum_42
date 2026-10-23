@@ -109,24 +109,23 @@ Both sensors answer at address `0x39`; they use **separate buses instead of a mu
 |----------|---------|----------|
 | USB serial (bench console + log dump) | USB, **115200 baud** | **CODE**: `Serial.begin(115200)` |
 | StartRun button — start / pause / resume and calibration start | D41 | **CODE**: `START_BUTTON_PIN = 41`; wiring convention **UNVERIFIED** |
-| Calibration mode button — skip line ↔ green dot | D39 | **CODE**: `CAL_SKIP_BUTTON_PIN = 39`; wiring convention **UNVERIFIED** |
-| Calibration button — enter/exit menu, repeat last sweep | D43 | **CODE**: `CAL_BUTTON_PIN = 43`; wiring convention **UNVERIFIED** |
+| Calibration button — enter/exit menu, repeat line sweep | D43 | **CODE**: `CAL_BUTTON_PIN = 43`; wiring convention **UNVERIFIED** |
 | Nicla link | **RX3 = D15** (Mega receive) / **TX3 = D14** (Mega transmit) + BSS138 shifter | **ASCII ToF readout is live in the main sketch**; binary protocol not implemented — see §7 |
 
-All three buttons are momentary, wired leg-to-**GND**, read with the internal
+All buttons are momentary, wired leg-to-**GND**, read with the internal
 pull-up (`INPUT_PULLUP`, pressed = **LOW**). Debounce is 25 ms. D41 starts only
 on a 500 ms hold; a tap pauses or resumes instantly. D43 opens and closes the
 calibration menu on a 3000 ms hold, and only from Idle, AwaitingCalibration or
 Paused — it is inert during a run. Inside the menu D41 **presses** to start the
-selected sweep, D39 skips between line (blue) and green-dot (green), a short D43
-tap repeats the last sweep, and a 3000 ms D43 hold exits. Verify the convention
-at the bench: the boot banner prints
-`BTN D41=<0|1> D39=<0|1> D43=<0|1> pressed=LOW (INPUT_PULLUP)`, and a press must
+line sweep, a short D43 tap repeats it, and a 3000 ms D43 hold exits. Green
+markers are judged by the fixed hand-tuned rule in `GreenMarker.h`; there is no
+colour-calibration mode. Verify the convention at the bench: the boot banner
+prints `BTN D41=<0|1> D43=<0|1> pressed=LOW (INPUT_PULLUP)`, and a press must
 read `0`.
 If the leads run beside motor wiring, fit 4.7–10 kΩ to +5 V and 100 nF to GND at
 each pin — the internal pull-up is weak and this is **UNVERIFIED** until measured.
 
-Do not reuse D2–D5, D14–D15, D20–D21, D30–D31, D35, D41, D39, D43 or
+Do not reuse D2–D5, D14–D15, D20–D21, D30–D31, D35, D41, D43 or
 A0/A2/A4/A6/A8/A10/A12/A14 without updating this table and the sketch together.
 D18/D19 (Serial1) were freed on 2026-10-22 when the Nicla link moved to Serial3.
 
@@ -136,27 +135,25 @@ D18/D19 (Serial1) were freed on 2026-10-22 when the Nicla link moved to Serial3.
 
 | Region | Addresses | Holds |
 |---|---|---|
-| Calibration slot A | **0–63** | magic `"Q42C"`, version, flank flags, sequence, line min/max, green thresholds, CRC |
+| Calibration slot A | **0–63** | magic `"Q42C"`, version, sequence, line min/max, CRC; the legacy green-threshold bytes are zeroed and ignored |
 | Calibration slot B | **64–127** | the other slot; writes alternate so a torn write leaves one loadable |
 | Journal | **disabled** | not written; before re-enabling, move it to 128 and read the note in `Journal.h` |
 
 The calibration region owns 0–127. The journal is disabled for now — its code is
 kept, but nothing offers, pumps or dumps it. A re-enable that forgets to move the
 journal would overwrite the calibration magic, which reads as **corrupt** and
-refuses to start, never as garbage thresholds.
+refuses to start, never as garbage references.
 
 ### 2.7 LED Diagnostics
 
 | State | Display (0–7) | Pattern |
 |---|---|---|
-| Boot, calibrated | all green, or all **red** if a colour flank used defaults | 3 × 120 ms |
+| Boot, calibrated | all green | 3 × 120 ms |
 | Idle | pixel 0 green heartbeat | 100 ms every 2 s |
 | No calibration | all **amber** | missing 300/300, corrupt 120/130 |
 | Start refused (no calibration) | all **red** | 300 ms |
-| Calibration menu — line mode | all **blue** | static |
-| Calibration menu — green-dot mode | all **green** | static |
+| Calibration menu | all **blue** | static |
 | Calibrating line | one **blue** dot walking | continuous |
-| Calibrating green dot | one **green** dot walking | continuous |
 | Calibration saved | all green | 3 × 120 ms |
 | Calibration usable, not saved | all **amber** | 3 × 120 ms |
 | Calibration failed | all **red** | 3 × 950 ms |
@@ -213,10 +210,9 @@ Pixels 8–11 are the colour sensors' illuminators: they stay lit in **every** f
 - **Ride height ~11.2 mm** — near the top of the QTR-8A's contrast range. Black/white
   readings are closer together than ideal, so the calibration sweep is mandatory and
   the base speed may need to stay low.
-- Calibration is split into two selectable sweeps: the **line** sweep (10 s over white +
-  black, blue LED) and the **green-dot** sweep (10 s over green + white + black, green LED).
-  The line sweep must run first because the persisted blob needs its references; the green
-  sweep refreshes only the colour thresholds. `k` re-runs the line sweep. Sweeping only one
+- Calibration is the **line** sweep (10 s over white + black, blue LED). Green markers
+  are judged by the fixed hand-tuned constants in `GreenMarker.h`, with no sweep and no
+  stored thresholds. `k` re-runs the line sweep at the bench. Sweeping only one
   surface produces a degenerate `min ≈ max` calibration.
 - The sketch reads the bar with plain `analogRead`; there is **no QTRSensors library** in
   this firmware.
@@ -236,9 +232,8 @@ Pixels 8–11 are the colour sensors' illuminators: they stay lit in **every** f
   way; green on both sides means dead end / U-turn; none means straight.
 - The illuminators (pixels 8–11) light the colour sensors, so they are part of the
   optical path — do not switch them off to "help" detection.
-- Thresholds are **derived on demand** by the green-dot mode of the calibration menu; a failed
-  green-dot sweep keeps the previous thresholds (or falls back to the hand-tuned constants)
-  and lights the red failure cue.
+- Thresholds are **fixed** hand-tuned constants in `GreenMarker.h`, pinned in
+  `test/green_detector_test.cpp`. They do not depend on a calibration sweep.
 - Bench readout: `g` prints `GRN L=… R=… conf LR`; `c` clears the held peak samples.
 - Mounting height/geometry is **not recorded** — do not quote a number until it is measured.
 
@@ -295,12 +290,8 @@ Run these on the bench before any run. Each item names the evidence it produces.
 - [ ] **Line calibration:** hold D43 3 s to open the menu (blue), then press D41. Sweep the
       bar over white **and** black for the full 10 s. Check the printed `MIN/MAX` per sensor:
       all eight ranges must be usable, not `min ≈ max`. Hold D43 3 s again to leave.
-- [ ] **Green-dot calibration:** from the menu, press D39 (display turns green), then D41.
-      Sweep both flanks over the green squares plus white and black for 10 s. The printed
-      `CAL L/R … OK` lines and the green result cue confirm it.
-- [ ] **Button control:** a short D43 tap in the menu repeats the last sweep; D39 changes the
-      mode without leaving; D41 press starts; D43 hold leaves to Idle (or AwaitingCalibration
-      if no usable blob exists).
+- [ ] **Button control:** a short D43 tap in the menu repeats the line sweep; D41 press
+      starts; D43 hold leaves to Idle (or AwaitingCalibration if no usable blob exists).
 - [ ] **Markers:** `g`, or the `LA`/`RA` fields on every fifth QTR line, one green square
       under each flank. `conf` must show the correct side, and the grey floor / black tape
       must not confirm.
@@ -327,6 +318,7 @@ Run these on the bench before any run. Each item names the evidence it produces.
 
 | Date | Change | Evidence |
 |------|--------|----------|
+| 2026-10-23 | Green-dot auto-calibration removed: green uses the fixed `GreenMarker.h` constants again; D39, the colour sweep and persisted green thresholds are gone. Line calibration/menu unchanged | **CODE** + host tests |
 | 2026-10-21 | Calibration is now a button menu (D43 3 s): line (blue) / green-dot (green), D39 skips, D41 starts, short D43 repeats, long D43 exits. D39 added | **CODE** + host tests |
 | 2026-10-20 | Line bar **flipped (net flip = 1)**: table `A14 … A0`. The straight-through table caused inverted steering, fighting wheels and motor whine | **BENCH** |
 | 2026-10-20 | Legacy sketches and the in-repo design removed; this document rebuilt with evidence tags | code + git history |
